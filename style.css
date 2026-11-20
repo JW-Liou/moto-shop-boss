@@ -1,0 +1,688 @@
+/* ===== 顏色與基本設定（改這裡就能換整體配色） ===== */
+:root {
+  --bg: #f3f4f6;
+  --card: #ffffff;
+  --text: #1f2937;
+  --muted: #6b7280;
+  --border: #e5e7eb;
+  --accent: #ea580c;
+  --accent-dark: #c2410c;
+  --dark: #111827;
+  --radius: 12px;
+}
+
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+
+body {
+  margin: 0;
+  font-family: system-ui, -apple-system, "Segoe UI", "Noto Sans TC", "Microsoft JhengHei", sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.5;
+}
+
+/* ===== 上方標題列 ===== */
+.topbar {
+  background: var(--dark);
+  color: #fff;
+  padding: 12px 20px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.brand { font-size: 18px; font-weight: 700; letter-spacing: 1px; }
+.brand span { color: var(--accent); }
+.user { font-size: 14px; color: #d1d5db; display: flex; align-items: center; gap: 10px; }
+
+.container { max-width: 960px; margin: 0 auto; padding: 20px 16px 40px; }
+
+/* ===== 卡片 ===== */
+.card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 20px;
+  margin-bottom: 16px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+.card h2 { margin: 0 0 12px; font-size: 20px; }
+.card h3 { margin: 24px 0 10px; font-size: 15px; color: var(--muted); }
+
+/* ===== 車牌搜尋 ===== */
+.search { display: flex; gap: 8px; }
+.search input {
+  flex: 1;
+  font-size: 20px;
+  padding: 12px 14px;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+}
+.msg { margin: 10px 0 0; color: var(--accent-dark); font-weight: 600; }
+.msg:empty { display: none; }
+
+/* ===== 表單 ===== */
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 12px;
+}
+label { display: flex; flex-direction: column; gap: 4px; font-size: 14px; color: var(--muted); }
+label small { color: #9ca3af; font-size: 12px; }
+input, select {
+  font: inherit;
+  color: var(--text);
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #fff;
+  width: 100%;
+}
+input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+.form-actions { margin-top: 16px; }
+
+/* ===== 按鈕 ===== */
+button {
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  border: none;
+  border-radius: 8px;
+  padding: 10px 18px;
+}
+.btn { background: var(--accent); color: #fff; }
+.btn:hover { background: var(--accent-dark); }
+.btn-ghost {
+  background: transparent;
+  color: inherit;
+  border: 1px solid currentColor;
+  padding: 6px 12px;
+  font-weight: 500;
+}
+.btn-small { background: var(--dark); color: #fff; padding: 6px 14px; font-size: 14px; }
+
+/* ===== 車牌樣式 ===== */
+.bike-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.plate {
+  display: inline-block;
+  background: #fff;
+  color: #000;
+  border: 2px solid #000;
+  border-radius: 6px;
+  padding: 2px 10px;
+  font-weight: 800;
+  letter-spacing: 2px;
+  font-family: ui-monospace, Consolas, monospace;
+}
+.bike-head .model { font-size: 18px; font-weight: 600; }
+.info { color: var(--muted); margin: 8px 0 0; }
+
+/* ===== 清單 ===== */
+.list { list-style: none; padding: 0; margin: 0; }
+.list li {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 12px 0;
+  border-top: 1px solid var(--border);
+}
+.list li:first-child { border-top: none; }
+.list .main { flex: 1; min-width: 180px; }
+.list .sub { color: var(--muted); font-size: 14px; }
+.list .money { font-weight: 700; }
+.list select { width: auto; padding: 6px 10px; font-weight: 700; border: none; }
+.list li.empty { color: var(--muted); display: block; }
+
+/* ===== 狀態顏色 ===== */
+.badge { display: inline-block; font-size: 13px; font-weight: 700; padding: 2px 10px; border-radius: 999px; }
+.todo  { background: #fee2e2; color: #b91c1c; }
+.doing { background: #fef3c7; color: #b45309; }
+.done  { background: #dcfce7; color: #15803d; }
+
+/* ===== 今日統計 ===== */
+.stats { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 8px; }
+.stat { background: var(--bg); border-radius: 10px; padding: 14px 16px; }
+.stat .num { font-size: 28px; font-weight: 800; }
+.stat .label { color: var(--muted); font-size: 14px; }
+
+/* ===== 登入頁 ===== */
+.login-box { max-width: 380px; margin: 80px auto; }
+.login-box .brand { color: var(--text); font-size: 24px; text-align: center; margin-bottom: 20px; }
+.login-box label { margin-bottom: 12px; }
+.login-box .btn { width: 100%; margin-top: 8px; }
+
+/* ===== 手機版 ===== */
+@media (max-width: 600px) {
+  .card { padding: 16px; }
+  .search input { font-size: 18px; }
+  .form-grid { grid-template-columns: 1fr 1fr; }
+}
+
+/* ===== 車輛總覽 ===== */
+.stats-4 { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
+.two-col { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; margin-bottom: 16px; }
+.two-col .card { margin-bottom: 0; }
+.toolbar { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.toolbar input { flex: 1; min-width: 200px; }
+.toolbar select { width: auto; }
+.rank { list-style: none; padding: 0; margin: 0; }
+.rank li { display: grid; grid-template-columns: 1fr auto; gap: 2px 8px; padding: 6px 0; }
+.rank .rank-num { color: var(--muted); font-size: 14px; }
+.rank .bar { grid-column: 1 / -1; height: 6px; background: var(--accent); border-radius: 3px; opacity: 0.8; }
+.rank li.empty { display: block; color: var(--muted); }
+/* ===== 主頁面三欄：左＝工作看板、中＝工作區、右＝其他功能 ===== */
+.layout {
+  max-width: none;
+  display: grid;
+  grid-template-columns: 1fr;
+  grid-template-areas: "main" "side" "extra";   /* 手機：由上往下排 */
+  gap: 16px;
+  align-items: start;
+}
+.layout .card { margin-bottom: 0; }
+.layout .content { grid-area: main; display: grid; gap: 16px; width: 100%; max-width: 900px; margin: 0 auto; }
+.layout .sidebar { grid-area: side; }
+.layout .extra { grid-area: extra; display: grid; gap: 16px; width: 100%; max-width: 900px; margin: 0 auto; }
+.extra .list .main { min-width: 0; }
+.placeholder { border-style: dashed; background: transparent; box-shadow: none; color: var(--muted); }
+
+/* 中等螢幕：看板在左，其他功能排到工作區下面 */
+@media (min-width: 1000px) {
+  .layout { grid-template-columns: 340px minmax(0, 1fr); grid-template-areas: "side main" "side extra"; }
+  .layout .sidebar { position: sticky; top: 16px; max-height: calc(100vh - 32px); overflow-y: auto; }
+}
+
+/* 大螢幕：三欄並排 */
+@media (min-width: 1400px) {
+  .layout { grid-template-columns: 340px minmax(0, 1fr) 300px; grid-template-areas: "side main extra"; }
+  .layout .extra { position: sticky; top: 16px; max-height: calc(100vh - 32px); overflow-y: auto; }
+}
+
+/* 手機上標題列的按鈕不要斷行，email 先藏起來 */
+.btn-ghost { white-space: nowrap; }
+@media (max-width: 600px) {
+  .user { flex-wrap: wrap; gap: 6px; }
+  #who { display: none; }
+}
+
+/* ===== 客戶查詢、登記車主 ===== */
+details.owner-edit { margin-top: 12px; }
+details.owner-edit summary { cursor: pointer; color: var(--accent-dark); font-weight: 600; font-size: 14px; }
+details.owner-edit .form-grid { margin-top: 10px; }
+.customer-head { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+.customer-head .name { font-size: 20px; font-weight: 700; }
+.customer-head .phone { color: var(--muted); }
+.mini-stats { display: flex; gap: 16px; flex-wrap: wrap; color: var(--muted); font-size: 14px; margin: 8px 0 0; }
+.mini-stats b { color: var(--text); }
+
+/* ===== 工作看板分頁 ===== */
+.tabs { display: flex; gap: 4px; background: var(--bg); padding: 4px; border-radius: 10px; margin: 20px 0 8px; }
+.tabs button { flex: 1; background: transparent; color: var(--muted); padding: 8px 4px; font-size: 14px; border-radius: 8px; }
+.tabs button.active { background: #fff; color: var(--text); box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08); }
+.tabs button span { display: inline-block; min-width: 20px; padding: 0 6px; border-radius: 999px; background: var(--border); font-size: 12px; margin-left: 2px; }
+.tabs button.active span { background: var(--accent); color: #fff; }
+
+/* 看板清單排緊一點：車牌、內容、按鈕排同一行 */
+.board-list li { flex-wrap: nowrap; gap: 10px; padding: 10px 0; }
+.board-list .main { min-width: 0; flex: 1; }
+.board-list .main div:first-child { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.board-list .plate { font-size: 13px; padding: 1px 6px; }
+
+/* ===== 今日營收彈出視窗 ===== */
+.modal {
+  position: fixed;
+  inset: 0;                                /* 蓋滿整個畫面 */
+  background: rgba(17, 24, 39, 0.5);       /* 半透明黑色背景 */
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding: 60px 16px;
+  z-index: 100;                            /* 疊在最上層 */
+}
+.modal-box {
+  background: #fff;
+  border-radius: var(--radius);
+  padding: 20px;
+  width: 100%;
+  max-width: 520px;
+  max-height: calc(100vh - 120px);
+  overflow-y: auto;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+}
+.modal-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+.modal-head h2 { margin: 0; }
+.modal .stat .num { font-size: 36px; }
+
+/* ===== 編輯、刪除工單 ===== */
+.btn-small.btn-danger { background: #fee2e2; color: #b91c1c; }
+.btn-small.btn-danger:hover { background: #fecaca; }
+
+/* ===== 高對比配色：讓字更清楚（放在最下面，會蓋過上面的設定） ===== */
+:root {
+  --bg: #e5e7eb;          /* 背景灰一點，白色卡片更明顯 */
+  --text: #111827;        /* 主要文字：接近黑色 */
+  --muted: #374151;       /* 次要文字：從淺灰改成深灰 */
+  --border: #d1d5db;      /* 分隔線加深 */
+  --accent: #c2410c;      /* 橘色加深，按鈕上的白字更清楚 */
+  --accent-dark: #9a3412;
+}
+body { font-size: 16px; }
+
+/* 卡片：框線和陰影加深，跟背景分得更清楚 */
+.card { border-color: #cbd5e1; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12); }
+.card h3 { color: #1f2937; }
+
+/* 表單：欄位名稱加粗、輸入框框線加深 */
+label { color: #1f2937; font-size: 15px; font-weight: 600; }
+label small { color: #4b5563; font-weight: 400; }
+input, select { border: 1px solid #6b7280; font-weight: 400; }
+input::placeholder { color: #6b7280; }
+
+/* 清單：第二行小字變深、變大 */
+.list .sub { color: #374151; font-size: 15px; }
+.info { color: #374151; }
+
+/* 統計數字的格子 */
+.stat { background: #f3f4f6; border: 1px solid #d1d5db; }
+.stat .label { color: #374151; font-size: 15px; }
+
+/* 看板分頁 */
+.tabs button { color: #374151; }
+.tabs button span { background: #d1d5db; color: #111827; }
+
+/* 上方標題列和預留區 */
+.user { color: #f3f4f6; }
+.topbar .brand span { color: #fb923c; }   /* 深色底上用亮一點的橘 */
+.placeholder { color: #4b5563; border-color: #9ca3af; }
+
+/* 左上角店名：按了回到主頁面 */
+a.brand { color: inherit; text-decoration: none; cursor: pointer; }
+a.brand:hover { opacity: 0.85; }
+
+/* ===== 車輛總覽：可以點的統計格、明細 ===== */
+.stat.clickable { cursor: pointer; transition: border-color 0.15s, background 0.15s; }
+.stat.clickable:hover { border-color: var(--accent); background: #fff7ed; }
+label.inline { flex-direction: row; align-items: center; gap: 8px; }
+label.inline input { width: auto; }
+#revenueSection, #orderSection, #bikeSection { scroll-margin-top: 16px; }
+
+/* ===== 預約、店內便條 ===== */
+.card-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+.card-head h2 { margin: 0; }
+.day-nav { display: flex; align-items: center; justify-content: space-between; background: #f3f4f6; border-radius: 8px; padding: 4px; margin-bottom: 4px; }
+.day-nav span { font-weight: 700; }
+.day-nav .btn-ghost { border: none; color: var(--text); font-size: 20px; padding: 2px 12px; }
+.list.compact li { padding: 8px 0; gap: 8px; }
+.list.compact .main { min-width: 0; }
+.list li.faded { opacity: 0.55; }
+.strike { text-decoration: line-through; }
+.list input[type="checkbox"] { width: 18px; height: 18px; flex: none; accent-color: var(--accent); }
+.btn-icon { background: transparent; color: #6b7280; font-size: 18px; padding: 2px 8px; }
+.btn-icon:hover { color: #b91c1c; }
+.btn-link { background: transparent; color: var(--muted); padding: 8px 0 0; font-size: 14px; font-weight: 500; text-decoration: underline; }
+#noteList { margin-top: 8px; }
+.note-add { display: flex; gap: 8px; }
+.note-add input { flex: 1; min-width: 0; }
+#apptList li { flex-wrap: wrap; }
+#apptList .main { flex-basis: 100%; }
+#apptList li .btn-small { margin-left: auto; }
+#apptList li .btn-small + .btn-small { margin-left: 0; }
+@media (min-width: 1400px) {
+  .layout { grid-template-columns: 340px minmax(0, 1fr) 340px; }  /* 右欄加寬一點 */
+}
+/* 車輛資料裡的預約提示 */
+.appt-note { background: #eff6ff; color: #1e3a8a; border-radius: 8px; padding: 8px 12px; margin: 8px 0 0; font-weight: 600; }
+
+/* ===== 小提示（toast）、防連點、電話遮罩 ===== */
+#toastBox { position: fixed; right: 16px; bottom: 16px; display: flex; flex-direction: column; gap: 8px; z-index: 200; }
+.toast {
+  background: #111827; color: #fff; padding: 12px 16px; border-radius: 10px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25); max-width: 360px; font-weight: 600;
+  animation: toast-in 0.2s ease-out;
+}
+.toast.error { background: #b91c1c; }
+.toast.ok { background: #15803d; }
+@keyframes toast-in { from { transform: translateY(10px); opacity: 0; } to { transform: none; opacity: 1; } }
+body.busy { cursor: progress; }
+body.busy .btn, body.busy .btn-small { opacity: 0.6; pointer-events: none; }   /* 存檔中，按鈕先變淡、按不了 */
+.reveal { cursor: pointer; }
+
+
+/* ===== 版面調整：一般筆電螢幕也排成三欄（放在最下面，會蓋過前面的設定） ===== */
+@media (min-width: 1200px) {
+  .layout { grid-template-columns: 300px minmax(0, 1fr) 300px; grid-template-areas: "side main extra"; }
+  .layout .extra { position: sticky; top: 16px; max-height: calc(100vh - 32px); overflow-y: auto; }
+}
+/* 大螢幕：左右兩欄再寬一點 */
+@media (min-width: 1500px) {
+  .layout { grid-template-columns: 340px minmax(0, 1fr) 340px; }
+}
+/* 比較窄的螢幕：預約、便條、最近查詢改排到工作看板下面，中間的工作區保持完整 */
+@media (min-width: 1000px) and (max-width: 1199px) {
+  .layout { grid-template-columns: 300px minmax(0, 1fr); grid-template-areas: "side main" "extra main"; }
+  .layout .sidebar { position: static; max-height: none; }
+}
+/* 左右欄比較窄的時候，看板分頁的字縮小一點，不要斷成兩行 */
+@media (max-width: 1499px) {
+  .tabs button { font-size: 13px; padding: 8px 2px; white-space: nowrap; }
+  .tabs button span { padding: 0 5px; }
+}
+
+#who { display: none; }
+
+/* =====================================================================
+   ===== 美化與動畫（放在最下面，蓋過前面的外觀；版面排列不變） =====
+   ===================================================================== */
+:root {
+  --shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.06), 0 1px 3px rgba(15, 23, 42, 0.10);
+  --shadow-md: 0 4px 12px rgba(15, 23, 42, 0.08), 0 2px 4px rgba(15, 23, 42, 0.06);
+  --shadow-lg: 0 20px 40px rgba(15, 23, 42, 0.18);
+  --ring: 0 0 0 3px rgba(194, 65, 12, 0.28);
+  --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --radius: 14px;
+}
+
+/* ----- 字體：思源黑體（Noto Sans TC），數字等寬比較整齊 ----- */
+body {
+  font-family: "Noto Sans TC", "Microsoft JhengHei", "PingFang TC", system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  letter-spacing: 0.01em;
+  background:
+    radial-gradient(1200px 400px at 50% -200px, rgba(234, 88, 12, 0.07), transparent),
+    var(--bg);
+  min-height: 100vh;
+}
+.num, .money, .kpi-value, .mini-kpi b, .list .money, .stat .num { font-variant-numeric: tabular-nums; }
+h2, h3 { letter-spacing: 0.02em; }
+
+/* ----- 上方標題列：固定在上面，按鈕變成膠囊形 ----- */
+.topbar {
+  background: linear-gradient(180deg, #1f2937, #111827);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.18);
+  padding: 10px 20px;
+}
+.brand { font-weight: 900; letter-spacing: 0.08em; }
+.topbar .btn-ghost {
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 999px;
+  padding: 6px 14px;
+  color: #f9fafb;
+  transition: background 0.18s, border-color 0.18s, transform 0.18s var(--ease);
+}
+.topbar .btn-ghost:hover { background: rgba(255, 255, 255, 0.12); border-color: rgba(255, 255, 255, 0.45); }
+.topbar .btn-ghost:active { transform: scale(0.96); }
+.topbar .btn-ghost.active { background: #fff; color: #111827; border-color: #fff; }
+
+/* 電腦版標題列固定在最上面；手機版不固定，避免占掉太多畫面 */
+@media (min-width: 700px) { .topbar { position: sticky; top: 0; z-index: 50; } }
+
+/* ----- 卡片：圓角大一點、柔和陰影、出現時往上浮 ----- */
+.card {
+  border-radius: var(--radius);
+  border-color: #d1d5db;
+  box-shadow: var(--shadow-sm);
+  animation: rise 0.42s var(--ease) both;
+}
+.card h2 { font-weight: 800; font-size: 19px; display: flex; align-items: center; gap: 10px; }
+.card h2::before {                                 /* 標題左邊的小橘條 */
+  content: ""; width: 4px; height: 18px; border-radius: 2px; background: var(--accent); flex: none;
+}
+.layout .content > .card:nth-child(2), .layout .extra > .card:nth-child(2) { animation-delay: 0.05s; }
+.layout .extra > .card:nth-child(3) { animation-delay: 0.1s; }
+.layout .sidebar { animation-delay: 0.03s; }
+
+@keyframes rise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+@keyframes fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes pop { from { opacity: 0; transform: scale(0.96) translateY(8px); } to { opacity: 1; transform: none; } }
+
+/* ----- 按鈕：滑過微微浮起、按下縮一下、鍵盤選到有光圈 ----- */
+button { transition: background 0.18s, color 0.18s, box-shadow 0.18s, transform 0.18s var(--ease), opacity 0.18s; }
+button:active { transform: scale(0.97); }
+button:focus-visible, a:focus-visible, summary:focus-visible { outline: none; box-shadow: var(--ring); }
+.btn {
+  background: linear-gradient(180deg, #d9480f, var(--accent));
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.15), inset 0 1px 0 rgba(255, 255, 255, 0.15);
+  border-radius: 10px;
+  padding: 11px 20px;
+  letter-spacing: 0.04em;
+}
+.btn:hover { background: linear-gradient(180deg, #c2410c, var(--accent-dark)); box-shadow: 0 4px 12px rgba(194, 65, 12, 0.35); transform: translateY(-1px); }
+.btn:active { transform: translateY(0) scale(0.98); }
+.btn-small { border-radius: 8px; padding: 7px 14px; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12); }
+.btn-small:hover { background: #374151; }
+.btn-small.btn-danger:hover { background: #fecaca; }
+.btn-icon:hover { background: #fee2e2; border-radius: 6px; }
+
+/* ----- 輸入框：選到時橘色光圈 ----- */
+input, select {
+  border-radius: 10px;
+  transition: border-color 0.18s, box-shadow 0.18s, background 0.18s;
+}
+input:hover, select:hover { border-color: #374151; }
+input:focus, select:focus { outline: none; border-color: var(--accent); box-shadow: var(--ring); }
+.search input { border-radius: 12px; font-weight: 700; }
+.search .btn { padding-left: 24px; padding-right: 24px; }
+
+/* ----- 統計格 ----- */
+.stat {
+  background: linear-gradient(180deg, #ffffff, #f3f4f6);
+  border-radius: 12px;
+  transition: transform 0.2s var(--ease), box-shadow 0.2s, border-color 0.2s;
+}
+.stat .num { font-weight: 900; letter-spacing: -0.01em; }
+.stat.clickable:hover { transform: translateY(-2px); box-shadow: var(--shadow-md); background: #fff7ed; }
+
+/* ----- 清單：滑過有底色 ----- */
+.list li { transition: background 0.15s; border-radius: 8px; }
+@media (hover: hover) {
+  .list li:not(.empty):hover { background: #f9fafb; }
+}
+.list li { padding-left: 6px; padding-right: 6px; }
+.badge { letter-spacing: 0.04em; }
+.plate { box-shadow: 0 1px 0 #000; }
+
+/* 工作看板比較窄：不要左右留白，第二行字小一點，避免斷成很多行 */
+.board-list li { padding-left: 0; padding-right: 0; }
+.board-list .sub { font-size: 13px; }
+.board-list .main div:first-child { font-weight: 600; }
+
+/* ----- 分頁：選到的那頁滑順切換 ----- */
+.tabs button { transition: background 0.2s, color 0.2s, box-shadow 0.2s; }
+.tabs button.active { box-shadow: var(--shadow-sm); }
+.tabs button span { transition: background 0.2s, color 0.2s; }
+
+/* ----- 展開區塊（登記車主）：箭頭會轉、內容淡入 ----- */
+details.owner-edit summary { list-style: none; display: inline-flex; align-items: center; gap: 6px; padding: 4px 0; }
+details.owner-edit summary::-webkit-details-marker { display: none; }
+details.owner-edit summary::before { content: "›"; font-size: 18px; line-height: 1; transition: transform 0.2s var(--ease); }
+details.owner-edit[open] summary::before { transform: rotate(90deg); }
+details.owner-edit[open] .form-grid, details.owner-edit[open] .form-actions { animation: rise 0.25s var(--ease) both; }
+
+/* ----- 彈出視窗：背景淡入、視窗彈出 ----- */
+.modal { backdrop-filter: blur(3px); animation: fade 0.2s ease both; }
+.modal-box { border-radius: 16px; box-shadow: var(--shadow-lg); animation: pop 0.28s var(--ease) both; }
+
+/* ----- 小提示 ----- */
+.toast { border-radius: 12px; animation: toast-in 0.28s var(--ease); }
+@keyframes toast-in { from { transform: translateY(14px) scale(0.98); opacity: 0; } to { transform: none; opacity: 1; } }
+
+/* ----- 登入頁 ----- */
+.login-box { margin-top: 12vh; padding: 32px 28px; box-shadow: var(--shadow-md); }
+.login-box .brand { font-size: 26px; }
+
+/* ----- 捲軸細一點（電腦版） ----- */
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-thumb { background: #c7ccd4; border-radius: 999px; border: 2px solid transparent; background-clip: padding-box; }
+::-webkit-scrollbar-thumb:hover { background: #9ca3af; background-clip: padding-box; border: 2px solid transparent; }
+
+
+/* =====================================================================
+   ===== 數據分析頁 =====
+   ===================================================================== */
+.container.wide { max-width: 1280px; }
+.an-head { display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap; }
+.an-head h2 { margin-bottom: 4px; }
+.an-head .info { margin: 0; font-size: 14px; }
+.an-controls { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.chips { display: flex; gap: 4px; flex-wrap: wrap; background: #f3f4f6; padding: 4px; border-radius: 12px; border: 1px solid #d1d5db; }
+.chips button { background: transparent; color: #374151; padding: 6px 12px; font-size: 14px; border-radius: 9px; }
+.chips button:hover { background: #e5e7eb; }
+.chips button.active { background: var(--dark); color: #fff; box-shadow: var(--shadow-sm); }
+.money-toggle { white-space: nowrap; }
+
+/* 金額遮蔽：櫃台有客人時看不到 */
+.money { transition: filter 0.25s; }
+body.hide-money .money { filter: blur(7px); user-select: none; }
+body.hide-money .money-shape { opacity: 0.35; }
+.money-shape { transition: opacity 0.25s; }
+
+/* 重點數字 */
+.kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin-bottom: 16px; }
+.kpi {
+  background: var(--card); border: 1px solid #d1d5db; border-radius: var(--radius);
+  padding: 14px 16px; box-shadow: var(--shadow-sm);
+  animation: rise 0.45s var(--ease) both; animation-delay: calc(var(--i) * 50ms);
+  transition: transform 0.2s var(--ease), box-shadow 0.2s;
+}
+.kpi:hover { transform: translateY(-2px); box-shadow: var(--shadow-md); }
+.kpi-label { color: #374151; font-size: 14px; font-weight: 600; }
+.kpi-value { font-size: 26px; font-weight: 900; margin: 2px 0; letter-spacing: -0.01em; }
+.kpi-delta { font-size: 13px; font-weight: 700; display: inline-block; padding: 1px 8px; border-radius: 999px; }
+.kpi-delta.up { background: #dcfce7; color: #166534; }
+.kpi-delta.down { background: #fee2e2; color: #991b1b; }
+.kpi-delta.flat { background: #f3f4f6; color: #374151; }
+
+.insight { color: #374151; margin: -4px 0 12px; font-size: 15px; }
+.insight:empty { display: none; }
+.footnote { color: #4b5563; font-size: 13px; margin: 8px 4px 0; }
+.legend { display: flex; gap: 14px; font-size: 14px; color: #374151; }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.sw { display: inline-block; width: 14px; height: 10px; border-radius: 3px; }
+.sw-bar { background: #c2410c; }
+.sw-line { background: #1d4ed8; height: 3px; border-radius: 2px; }
+.three-col { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; margin-bottom: 16px; }
+.three-col .card { margin-bottom: 0; }
+
+/* SVG 圖表 */
+.chart { width: 100%; min-height: 120px; }
+.svg-chart { display: block; overflow: visible; }
+.svg-chart .grid { stroke: #e5e7eb; stroke-width: 1; }
+.svg-chart .axis { stroke: #9ca3af; stroke-width: 1; }
+.svg-chart .tick { fill: #4b5563; font-size: 12px; }
+.svg-chart .val { fill: #111827; font-size: 12px; font-weight: 700; }
+.svg-chart .hover-line { stroke: #6b7280; stroke-dasharray: 3 3; transition: opacity 0.15s; pointer-events: none; }
+.svg-chart rect.grow { transform-box: fill-box; transform-origin: 50% 100%; animation: grow-y 0.7s var(--ease) both; animation-delay: var(--d, 0ms); transition: fill-opacity 0.15s; }
+.svg-chart rect.grow:hover { fill-opacity: 1; }
+.svg-chart .draw { stroke-dasharray: 1; stroke-dashoffset: 1; animation: draw 1s var(--ease) 0.2s forwards; }
+.svg-chart .pop { transform-box: fill-box; transform-origin: center; animation: pop-dot 0.3s var(--ease) both; animation-delay: var(--d, 0ms); }
+.svg-chart .fade { animation: fade 0.4s ease both; animation-delay: var(--d, 0ms); }
+@keyframes grow-y { from { transform: scaleY(0); } to { transform: scaleY(1); } }
+@keyframes draw { to { stroke-dashoffset: 0; } }
+@keyframes pop-dot { from { transform: scale(0); } to { transform: scale(1); } }
+
+/* 橫條 */
+.hbars { display: grid; gap: 10px; }
+.hbar { animation: rise 0.4s var(--ease) both; animation-delay: calc(var(--i) * 40ms); }
+.hbar-top { display: flex; justify-content: space-between; gap: 8px; font-size: 15px; margin-bottom: 4px; }
+.hbar-label { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hbar-val { color: #374151; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.hbar-track { height: 10px; background: #f3f4f6; border-radius: 999px; overflow: hidden; }
+.hbar-fill { height: 100%; width: var(--w); border-radius: 999px; background: linear-gradient(90deg, #fb923c, #c2410c); animation: grow-x 0.8s var(--ease) both; animation-delay: calc(var(--i) * 40ms + 100ms); transform-origin: left; }
+.hbar:first-child .hbar-fill { background: linear-gradient(90deg, #ea580c, #9a3412); }
+@keyframes grow-x { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+
+/* 甜甜圈 */
+.donut-wrap { display: flex; align-items: center; gap: 20px; flex-wrap: wrap; }
+.donut { width: 160px; height: 160px; flex: none; }
+.donut .seg { transition: stroke-dasharray 0.9s var(--ease); cursor: default; }
+.donut .seg:hover { stroke-width: 16; }
+.donut-num { font-size: 22px; font-weight: 900; fill: #111827; font-variant-numeric: tabular-nums; }
+.donut-sub { font-size: 10px; fill: #4b5563; }
+.donut-legend { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; flex: 1; min-width: 160px; }
+.donut-legend li { display: grid; grid-template-columns: 12px 1fr auto 48px; align-items: center; gap: 8px; font-size: 15px; }
+.donut-legend i { width: 12px; height: 12px; border-radius: 3px; }
+.donut-legend b { font-variant-numeric: tabular-nums; }
+.donut-legend small { color: #4b5563; text-align: right; font-size: 13px; }
+
+/* 小數字格 */
+.mini-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; }
+.mini-kpi { background: linear-gradient(180deg, #fff, #f3f4f6); border: 1px solid #d1d5db; border-radius: 12px; padding: 12px 14px; display: flex; flex-direction: column; animation: rise 0.4s var(--ease) both; animation-delay: calc(var(--i) * 50ms); }
+.mini-kpi b { font-size: 22px; font-weight: 900; }
+.mini-kpi span { color: #374151; font-size: 14px; }
+#retention { grid-template-columns: 1fr 1fr; }
+.appt-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; align-items: center; }
+
+/* 排行表 */
+.table-wrap { overflow-x: auto; }
+.an-table { width: 100%; border-collapse: collapse; font-size: 15px; }
+.an-table th { text-align: left; color: #374151; font-size: 13px; font-weight: 700; padding: 8px 10px; border-bottom: 2px solid #d1d5db; white-space: nowrap; }
+.an-table td { padding: 10px; border-bottom: 1px solid #e5e7eb; white-space: nowrap; }
+.an-table .r { text-align: right; font-variant-numeric: tabular-nums; }
+.an-table .muted { color: #6b7280; }
+.an-table tbody tr { cursor: pointer; transition: background 0.15s; animation: fade 0.35s ease both; animation-delay: calc(var(--i) * 30ms); }
+.an-table tbody tr:hover { background: #fff7ed; }
+.an-table .plate { font-size: 13px; padding: 1px 6px; }
+.an-table td.empty { color: #4b5563; text-align: center; cursor: default; }
+.empty { color: #4b5563; }
+
+/* 圖表提示框 */
+.chart-tip {
+  position: fixed; left: 0; top: 0; z-index: 300; pointer-events: none;
+  background: #111827; color: #fff; font-size: 14px; line-height: 1.5;
+  padding: 8px 12px; border-radius: 10px; box-shadow: var(--shadow-lg);
+  transition: transform 0.08s linear;
+}
+.chart-tip b { display: block; margin-bottom: 2px; }
+
+@media (max-width: 600px) {
+  .kpis { grid-template-columns: 1fr 1fr; }
+  .kpi-value { font-size: 22px; }
+  .donut { width: 130px; height: 130px; }
+  .chips button { padding: 6px 9px; font-size: 13px; }
+}
+
+/* ----- 有開「減少動態效果」的人，關掉動畫 ----- */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+  .svg-chart .draw { stroke-dashoffset: 0; }
+}
+
+
+/* =====================================================================
+   ===== 來客名單、垃圾桶、操作紀錄 =====
+   ===================================================================== */
+.modal-box.modal-wide { max-width: 720px; }
+#visitFilter { margin: 4px 0 8px; }
+.visit-day { margin: 18px 0 4px; font-size: 15px; color: #1f2937; position: sticky; top: -20px; background: #fff; padding: 6px 0; z-index: 1; }
+.visit-list li { align-items: center; }
+.clickable-row { cursor: pointer; }
+@media (hover: hover) { .clickable-row:hover { background: #fff7ed !important; } }
+.visit-phone { text-decoration: underline dotted; text-underline-offset: 3px; }
+.log-type { width: auto; padding: 6px 10px; font-size: 14px; }
+.log-diff { font-size: 14px; color: #1f2937; background: #f3f4f6; border-radius: 6px; padding: 3px 8px; margin: 3px 0; display: inline-block; }
+#trashList li, #logList li { align-items: center; }
+#trashList .badge, #logList .badge { flex: none; }
+.card-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+
+
+/* =====================================================================
+   ===== 老闆版：修改車輛、客戶操作、通知車主 =====
+   ===================================================================== */
+.card-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 14px; padding-top: 12px; border-top: 1px dashed #d1d5db; }
+.btn-notify { background: #15803d; }
+.btn-notify:hover { background: #166534 !important; }
+textarea {
+  width: 100%; box-sizing: border-box; font: inherit; font-size: 16px; font-weight: 400; line-height: 1.6;
+  padding: 10px 12px; margin-top: 4px; border: 1px solid #9ca3af; border-radius: 10px; resize: vertical;
+  transition: border-color 0.18s, box-shadow 0.18s;
+}
+textarea:focus { outline: none; border-color: var(--accent); box-shadow: var(--ring); }
+.notify-actions { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin: 14px 0 6px; }
+.notify-actions a.btn { text-decoration: none; display: inline-block; cursor: pointer; }
+.notify-actions .btn-small { padding: 11px 18px; font-size: 15px; }
+.btn.btn-line { background: #06c755; }
+.btn.btn-line:hover { background: #05a647; box-shadow: 0 4px 12px rgba(6, 199, 85, 0.35); }
+#mergeList li .main { font-size: 15px; }

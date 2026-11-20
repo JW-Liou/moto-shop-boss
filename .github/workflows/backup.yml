@@ -1,0 +1,52 @@
+# 每天自動備份資料庫
+# 台灣時間每天凌晨 3 點跑一次；也可以到 GitHub 的 Actions 頁面手動按「Run workflow」
+name: 每日自動備份
+
+on:
+  schedule:
+    - cron: "0 19 * * *"     # GitHub 用世界時間，19:00 = 台灣凌晨 3:00
+  workflow_dispatch:
+
+permissions:
+  contents: write            # 每個月寫一次「備份還在跑」的紀錄，讓排程不會被 GitHub 停掉
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: 安裝需要的工具
+        run: |
+          pip install openpyxl
+          command -v 7z || (sudo apt-get update && sudo apt-get install -y p7zip-full)
+
+      - name: 備份
+        env:
+          SHOP_EMAIL: ${{ secrets.SHOP_EMAIL }}
+          SHOP_PASSWORD: ${{ secrets.SHOP_PASSWORD }}
+          BACKUP_PASSWORD: ${{ secrets.BACKUP_PASSWORD }}
+        run: python scripts/backup.py
+
+      - name: 上傳備份檔（保留 90 天）
+        uses: actions/upload-artifact@v4
+        with:
+          name: 自動備份-${{ github.run_number }}
+          path: backup/*.7z
+          retention-days: 90
+
+      # GitHub 會停掉 60 天沒有動靜的公開專案排程，每月 1 號寫一筆紀錄避免被停
+      - name: 每月一次的紀錄
+        if: github.event_name == 'schedule'
+        run: |
+          if [ "$(TZ=Asia/Taipei date +%d)" = "01" ]; then
+            echo "最近一次自動備份：$(TZ=Asia/Taipei date '+%Y-%m-%d %H:%M')" > backup-status.txt
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add backup-status.txt
+            git commit -m "自動備份仍在運作" && git push || true
+          fi

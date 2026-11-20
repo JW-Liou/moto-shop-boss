@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>客戶查詢 - 竹北榮詮管理系統</title>
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#111827">
+  <link rel="icon" href="icon-192.png">
+  <link rel="apple-touch-icon" href="icon-180.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&display=swap">
+  <link rel="stylesheet" href="style.css">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="config.js"></script>
+  <script src="ui.js" defer></script>
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="app.html">竹北榮詮<span>管理系統</span></a>
+    <div class="user">
+      <button class="btn-ghost" onclick="location.href='app.html'">主畫面</button>
+      <button class="btn-ghost" onclick="location.href='customers.html'">客戶查詢</button>
+      <button class="btn-ghost" onclick="location.href='bikes.html'">車輛總覽</button>
+      <button class="btn-ghost" onclick="location.href='analytics.html'">數據分析</button>
+      <button class="btn-ghost" onclick="location.href='import.html'">匯入／備份</button>
+    </div>
+  </header>
+
+  <main class="container">
+    <section class="card">
+      <h2>客戶查詢</h2>
+      <div class="search">
+        <input id="q" placeholder="輸入電話、車牌或姓名"
+               onkeydown="if (event.key === 'Enter') searchCustomer()">
+        <button class="btn" onclick="searchCustomer()">查詢</button>
+      </div>
+      <p class="msg" id="msg"></p>
+    </section>
+
+    <div id="results"></div>
+  </main>
+
+  <!-- 編輯客戶 -->
+  <div class="modal" id="editModal" hidden onclick="if (event.target === this) closeModals()">
+    <div class="modal-box">
+      <div class="modal-head">
+        <h2>編輯客戶</h2>
+        <button class="btn-small" onclick="closeModals()">取消</button>
+      </div>
+      <div class="form-grid">
+        <label>姓名<input id="eName"></label>
+        <label>電話<input id="ePhone"></label>
+      </div>
+      <label>備註<input id="eNote" placeholder="例如：喜歡用 Motul 機油"></label>
+      <div class="form-actions">
+        <button class="btn" onclick="saveCustomer()">儲存</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 合併客戶：同一個人被建了兩次時用 -->
+  <div class="modal" id="mergeModal" hidden onclick="if (event.target === this) closeModals()">
+    <div class="modal-box">
+      <div class="modal-head">
+        <h2>合併客戶</h2>
+        <button class="btn-small" onclick="closeModals()">取消</button>
+      </div>
+      <p class="info" id="mergeFrom"></p>
+      <div class="search">
+        <input id="mergeQ" placeholder="找要合併過去的客戶：電話或姓名"
+               onkeydown="if (event.key === 'Enter') searchMergeTarget()">
+        <button class="btn" onclick="searchMergeTarget()">找</button>
+      </div>
+      <ul class="list" id="mergeList"></ul>
+    </div>
+  </div>
+
+  <script>
+    // 小工具：建立一個元素，順便設定 class 和文字
+    function el(tag, className, text) {
+      const e = document.createElement(tag);
+      if (className) e.className = className;
+      if (text !== undefined) e.textContent = text;
+      return e;
+    }
+
+    // 車牌統一格式：去掉空白和 -，全部轉大寫
+    function normalizePlate(text) {
+      return text.toUpperCase().replace(/[^A-Z0-9]/g, "");
+    }
+
+    // 電話只留數字，0912-345-678 和 0912345678 才會被當成同一支
+    function phoneDigits(phone) {
+      return (phone || "").replace(/\D/g, "");
+    }
+
+    // 查客戶時要一起帶出來的資料：名下的車，以及每台車的工單
+    const CUSTOMER_FIELDS = "*, bikes(id, plate, model, mileage, service_records(date, total, status))";
+
+    // 每次查詢都直接請資料庫幫忙找，不用把全部客戶抓回來
+    // （Supabase 一次最多只給 1000 筆，客戶多了以後全部抓會漏資料）
+    async function searchCustomer() {
+      const q = document.getElementById("q").value.trim();
+      const msg = document.getElementById("msg");
+      const results = document.getElementById("results");
+      results.innerHTML = "";
+      if (!q) {
+        msg.textContent = "請輸入電話、車牌或姓名";
+        return;
+      }
+      msg.textContent = "查詢中...";
+
+      // 判斷輸入的是什麼：
+      // 有英文字母 → 車牌；只有數字和 - → 電話；其他（中文）→ 姓名
+      let mode, query;
+      if (/[A-Za-z]/.test(q)) {
+        mode = "車牌";
+        // 先找車牌符合的車，再用車主編號找客戶
+        const { data: bikes, error } = await db
+          .from("bikes")
+          .select("customer_id")
+          .ilike("plate", `%${normalizePlate(q)}%`)
+          .not("customer_id", "is", null)
+          .limit(50);
+        if (error) {
+          msg.textContent = "查詢失敗：" + error.message;
+          return;
+        }
+        const ids = [...new Set(bikes.map(b => b.customer_id))];
+        query = db.from("customers").select(CUSTOMER_FIELDS).in("id", ids);
+      } else if (/^[\d\s\-()+]+$/.test(q)) {
+        mode = "電話";
+        query = db.from("customers").select(CUSTOMER_FIELDS).ilike("phone_digits", `%${phoneDigits(q)}%`);
+      } else {
+        mode = "姓名";
+        query = db.from("customers").select(CUSTOMER_FIELDS).ilike("name", `%${q}%`);
+      }
+
+      const { data: matches, error } = await query.limit(50);
+      if (error) {
+        msg.textContent = "查詢失敗：" + error.message;
+        return;
+      }
+
+      msg.textContent = matches.length
+        ? `用${mode}找到 ${matches.length} 位客戶` + (matches.length === 50 ? "（只顯示前 50 位，可以打得更完整一點）" : "")
+        : `用${mode}找不到客戶`;
+      matches.forEach(c => results.appendChild(customerCard(c)));
+
+      // 用車牌查詢時，順便找「還沒登記車主」的車
+      if (mode === "車牌") {
+        const { data: noOwner } = await db
+          .from("bikes")
+          .select("plate, model")
+          .is("customer_id", null)
+          .ilike("plate", `%${normalizePlate(q)}%`)
+          .limit(50);
+        if (noOwner && noOwner.length) results.appendChild(noOwnerCard(noOwner));
+      }
+    }
+
+    // 一位客戶的卡片：基本資料、統計、名下所有車
+    function customerCard(c) {
+      const card = el("section", "card");
+
+      const head = el("div", "customer-head");
+      head.append(el("span", "name", c.name || "未填姓名"), el("span", "phone", c.phone || "沒有電話"));
+
+      // 統計：幾台車、來店幾次、累計消費、最後一次來
+      const records = c.bikes.flatMap(b => b.service_records || []);
+      // 累計消費只算已完成的工單（跟營收算法一樣）
+      const spend = records.filter(r => r.status === "已完成").reduce((sum, r) => sum + (r.total || 0), 0);
+      const dates = records.map(r => r.date).filter(Boolean).sort();
+      const stats = el("div", "mini-stats");
+      stats.append(
+        statItem("車輛", `${c.bikes.length} 台`),
+        statItem("來店", `${records.length} 次`),
+        statItem("累計消費", `$${spend.toLocaleString()}`),
+        statItem("上次來店", dates.length ? dates[dates.length - 1] : "-")
+      );
+
+      const list = el("ul", "list");
+      if (c.bikes.length === 0) list.appendChild(el("li", "empty", "名下還沒有車"));
+      c.bikes.forEach(b => {
+        const bDates = (b.service_records || []).map(r => r.date).filter(Boolean).sort();
+        const main = el("div", "main");
+        main.append(
+          el("div", "", b.model || "未填車型"),
+          el("div", "sub",
+            `里程 ${b.mileage ? b.mileage.toLocaleString() : "-"} 公里｜來店 ${(b.service_records || []).length} 次｜上次 ${bDates.length ? bDates[bDates.length - 1] : "-"}`)
+        );
+        const li = el("li");
+        li.append(el("span", "plate", b.plate), main, openButton(b.plate));
+        list.appendChild(li);
+      });
+
+      // 編輯、合併、刪除
+      const actions = el("div", "card-actions");
+      const editBtn = el("button", "btn-small", "編輯");
+      editBtn.onclick = () => openEditCustomer(c);
+      const mergeBtn = el("button", "btn-small", "合併重複客戶");
+      mergeBtn.onclick = () => openMerge(c);
+      const delBtn = el("button", "btn-small btn-danger", "刪除");
+      delBtn.onclick = () => deleteCustomer(c);
+      actions.append(editBtn, mergeBtn, delBtn);
+
+      card.append(head, stats, el("h3", "", "名下車輛"), list, actions);
+      return card;
+    }
+
+    function statItem(label, value) {
+      const span = el("span", "", label + " ");
+      span.appendChild(el("b", "", value));
+      return span;
+    }
+
+    // 沒登記車主的車：提示可以去登記
+    function noOwnerCard(bikes) {
+      const card = el("section", "card");
+      card.append(
+        el("h2", "", "還沒登記車主的車"),
+        el("p", "info", "打開後，在車輛資料下方的「登記／修改車主」填上電話，就會連到客戶。")
+      );
+      const list = el("ul", "list");
+      bikes.forEach(b => {
+        const li = el("li");
+        li.append(el("span", "plate", b.plate), el("div", "main sub", b.model || "未填車型"), openButton(b.plate));
+        list.appendChild(li);
+      });
+      card.appendChild(list);
+      return card;
+    }
+
+    // ===== 編輯、合併、刪除客戶 =====
+    let editing = null;      // 正在編輯的客戶
+    let mergeSource = null;  // 要被合併掉的客戶
+
+    function closeModals() {
+      document.getElementById("editModal").hidden = true;
+      document.getElementById("mergeModal").hidden = true;
+    }
+    document.addEventListener("keydown", e => { if (e.key === "Escape") closeModals(); });
+
+    // 操作完成後，顯示訊息並重新查一次，畫面就會更新
+    function done(message) {
+      closeModals();
+      const q = document.getElementById("q");
+      if (q.value.trim()) searchCustomer().then(() => document.getElementById("msg").textContent = message);
+      else document.getElementById("msg").textContent = message;
+    }
+
+    function openEditCustomer(c) {
+      editing = c;
+      document.getElementById("eName").value = c.name || "";
+      document.getElementById("ePhone").value = c.phone || "";
+      document.getElementById("eNote").value = c.note || "";
+      document.getElementById("editModal").hidden = false;
+    }
+
+    async function saveCustomer() {
+      const name = document.getElementById("eName").value.trim() || "未填姓名";
+      const phone = document.getElementById("ePhone").value.trim();
+      const note = document.getElementById("eNote").value.trim();
+      const digits = phoneDigits(phone);
+
+      if (digits && !/^09\d{8}$/.test(digits) && !/^0[2-8]\d{7,8}$/.test(digits)) {
+        if (!confirm(`電話「${phone}」看起來不像台灣的手機或市話號碼，確定要儲存嗎？`)) return;
+      }
+      // 這支電話已經是別人的 → 很可能是同一個人，建議用合併
+      if (digits && digits !== phoneDigits(editing.phone)) {
+        const { data: other } = await db.from("customers").select("id, name")
+          .eq("phone_digits", digits).neq("id", editing.id).limit(1).maybeSingle();
+        if (other) {
+          alert(`這支電話已經是「${other.name}」的了。如果是同一個人，請用「合併重複客戶」。`);
+          return;
+        }
+      }
+      const { error } = await db.from("customers").update({ name, phone, note }).eq("id", editing.id);
+      if (error) return alert("儲存失敗：" + error.message);
+      done(`已更新「${name}」的資料`);
+    }
+
+    async function deleteCustomer(c) {
+      const bikes = c.bikes.length;
+      const records = c.bikes.reduce((s, b) => s + (b.service_records || []).length, 0);
+      const ok = confirm(
+        `確定要刪除客戶「${c.name}」嗎？\n\n` +
+        (bikes ? `他名下的 ${bikes} 台車和 ${records} 張工單也會一起刪除。\n` : "") +
+        "刪錯了可以在 180 天內，到「匯入／備份」最下面的垃圾桶救回。"
+      );
+      if (!ok) return;
+      const { error } = await db.from("customers").delete().eq("id", c.id);
+      if (error) return alert("刪除失敗：" + error.message);
+      done(`已刪除「${c.name}」`);
+    }
+
+    function openMerge(c) {
+      mergeSource = c;
+      document.getElementById("mergeFrom").textContent =
+        `把「${c.name}　${c.phone || "沒有電話"}」（${c.bikes.length} 台車）合併到另一位客戶。` +
+        "合併後，他的車會移到那位客戶名下，這筆客戶資料會刪掉。";
+      document.getElementById("mergeQ").value = "";
+      document.getElementById("mergeList").innerHTML = "";
+      document.getElementById("mergeModal").hidden = false;
+      document.getElementById("mergeQ").focus();
+    }
+
+    async function searchMergeTarget() {
+      const q = document.getElementById("mergeQ").value.trim();
+      const ul = document.getElementById("mergeList");
+      ul.innerHTML = "";
+      if (!q) return;
+      let query = db.from("customers").select("id, name, phone, note, bikes(id)").neq("id", mergeSource.id).limit(20);
+      query = /^[\d\s\-()+]+$/.test(q) ? query.ilike("phone_digits", `%${phoneDigits(q)}%`) : query.ilike("name", `%${q}%`);
+      const { data, error } = await query;
+      if (error) return ul.appendChild(el("li", "empty", "查詢失敗：" + error.message));
+      if (!data.length) return ul.appendChild(el("li", "empty", "找不到客戶"));
+      data.forEach(t => {
+        const li = el("li");
+        const btn = el("button", "btn-small", "合併到這位");
+        btn.onclick = () => mergeInto(t);
+        li.append(el("div", "main", `${t.name}　${t.phone || "沒有電話"}　（${t.bikes.length} 台車）`), btn);
+        ul.appendChild(li);
+      });
+    }
+
+    async function mergeInto(target) {
+      const from = mergeSource;
+      const ok = confirm(
+        `確定要把「${from.name}」合併到「${target.name}」嗎？\n\n` +
+        `${from.bikes.length} 台車會移到「${target.name}」名下，「${from.name}」這筆客戶資料會刪掉。`
+      );
+      if (!ok) return;
+
+      // 1. 車子換到新車主名下
+      const { error: e1 } = await db.from("bikes").update({ customer_id: target.id }).eq("customer_id", from.id);
+      if (e1) return alert("合併失敗（移車輛時）：" + e1.message);
+
+      // 2. 舊的電話、備註記在新客戶的備註裡，資料不會不見
+      const memo = `合併自：${from.name}${from.phone ? " " + from.phone : ""}${from.note ? "（" + from.note + "）" : ""}`;
+      const note = [target.note, memo].filter(Boolean).join("；");
+      const { error: e2 } = await db.from("customers").update({ note }).eq("id", target.id);
+      if (e2) return alert("合併失敗（寫備註時）：" + e2.message);
+
+      // 3. 刪掉舊客戶（車已經移走了，不會被一起刪）
+      const { error: e3 } = await db.from("customers").delete().eq("id", from.id);
+      if (e3) return alert("合併失敗（刪舊客戶時）：" + e3.message);
+
+      document.getElementById("q").value = target.phone || target.name;
+      done(`已把「${from.name}」合併到「${target.name}」`);
+    }
+
+    function openButton(plate) {
+      const btn = el("button", "btn-small", "打開");
+      btn.onclick = () => location.href = "app.html?plate=" + encodeURIComponent(plate);
+      return btn;
+    }
+
+    // 沒登入就送回登入頁
+    async function checkLogin() {
+      const { data } = await db.auth.getSession();
+      if (!data.session) location.href = "index.html";
+    }
+
+    checkLogin();
+  </script>
+</body>
+</html>

@@ -1,0 +1,779 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>數據分析 - 竹北榮詮管理系統</title>
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#111827">
+  <link rel="icon" href="icon-192.png">
+  <link rel="apple-touch-icon" href="icon-180.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&display=swap">
+  <link rel="stylesheet" href="style.css">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="config.js"></script>
+  <script src="ui.js" defer></script>
+</head>
+<body class="hide-money">
+  <header class="topbar">
+    <a class="brand" href="app.html">竹北榮詮<span>管理系統</span></a>
+    <nav class="user">
+      <button class="btn-ghost" onclick="location.href='app.html'">主畫面</button>
+      <button class="btn-ghost" onclick="location.href='customers.html'">客戶查詢</button>
+      <button class="btn-ghost" onclick="location.href='bikes.html'">車輛總覽</button>
+      <button class="btn-ghost" onclick="location.href='analytics.html'">數據分析</button>
+      <button class="btn-ghost" onclick="location.href='import.html'">匯入／備份</button>
+    </nav>
+  </header>
+
+  <main class="container wide">
+    <!-- 標題、期間選擇、金額遮蔽 -->
+    <section class="card an-head">
+      <div class="an-title">
+        <h2>數據分析</h2>
+        <p class="info" id="rangeText">讀取資料中…</p>
+      </div>
+      <div class="an-controls">
+        <div class="chips" id="periodChips">
+          <button data-p="7d">近 7 天</button>
+          <button data-p="30d" class="active">近 30 天</button>
+          <button data-p="month">本月</button>
+          <button data-p="lastmonth">上月</button>
+          <button data-p="90d">近 3 個月</button>
+          <button data-p="year">今年</button>
+          <button data-p="all">全部</button>
+        </div>
+        <button class="btn-small money-toggle" id="moneyBtn" onclick="toggleMoney()">顯示金額</button>
+      </div>
+    </section>
+
+    <!-- 1. 重點數字 -->
+    <section class="kpis" id="kpis"></section>
+
+    <!-- 2. 趨勢 -->
+    <section class="card">
+      <div class="card-head">
+        <h2>營收與來客趨勢</h2>
+        <div class="legend">
+          <span><i class="sw sw-bar"></i>營收</span>
+          <span><i class="sw sw-line"></i>來客數</span>
+        </div>
+      </div>
+      <p class="insight" id="trendInsight"></p>
+      <div class="chart" id="trendChart"></div>
+    </section>
+
+    <!-- 3. 什麼時候最忙 -->
+    <div class="two-col">
+      <section class="card">
+        <h2>星期幾最忙</h2>
+        <p class="insight" id="weekInsight"></p>
+        <div class="chart" id="weekChart"></div>
+      </section>
+      <section class="card">
+        <h2>幾點最忙</h2>
+        <p class="insight" id="hourInsight"></p>
+        <div class="chart" id="hourChart"></div>
+      </section>
+    </div>
+
+    <!-- 4. 做了什麼 -->
+    <div class="two-col">
+      <section class="card">
+        <h2>熱門維修項目</h2>
+        <p class="insight" id="itemInsight"></p>
+        <div class="hbars" id="itemBars"></div>
+      </section>
+      <section class="card">
+        <h2>工單狀態</h2>
+        <p class="insight" id="statusInsight"></p>
+        <div class="donut-wrap" id="statusDonut"></div>
+      </section>
+    </div>
+
+    <!-- 5. 客人 -->
+    <div class="two-col">
+      <section class="card">
+        <h2>新客與回頭客</h2>
+        <p class="insight" id="custInsight"></p>
+        <div class="donut-wrap" id="custDonut"></div>
+      </section>
+      <section class="card">
+        <h2>客人回流</h2>
+        <p class="insight">以全部資料計算，不受上方期間影響</p>
+        <div class="mini-kpis" id="retention"></div>
+      </section>
+    </div>
+
+    <section class="card">
+      <h2>消費最高的車輛</h2>
+      <p class="insight" id="topInsight"></p>
+      <div class="table-wrap">
+        <table class="an-table">
+          <thead><tr><th>#</th><th>車牌</th><th>車型</th><th class="r">來店</th><th class="r">消費</th><th class="r">占營收</th></tr></thead>
+          <tbody id="topBikes"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- 6. 車 -->
+    <div class="three-col">
+      <section class="card">
+        <h2>來店車型</h2>
+        <div class="hbars" id="modelBars"></div>
+      </section>
+      <section class="card">
+        <h2>車齡分布</h2>
+        <div class="chart" id="ageChart"></div>
+      </section>
+      <section class="card">
+        <h2>進廠里程</h2>
+        <div class="chart" id="kmChart"></div>
+      </section>
+    </div>
+
+    <!-- 7. 預約 -->
+    <section class="card">
+      <h2>預約狀況</h2>
+      <p class="insight" id="apptInsight"></p>
+      <div class="appt-grid">
+        <div class="donut-wrap" id="apptDonut"></div>
+        <div class="mini-kpis" id="apptKpis"></div>
+      </div>
+    </section>
+
+    <p class="footnote">
+      營收只算「已完成」的工單，日期以完成當天為準；來客數是同一台車同一天只算一次；客單價不含金額 0 的工單（例如從舊 Excel 匯入的紀錄）。
+    </p>
+  </main>
+
+  <div class="chart-tip" id="tip" hidden></div>
+
+  <script>
+    // ===== 資料 =====
+    let records = [], bikes = [], appts = [];
+    let bikeMap = new Map();      // 車輛 id → 車輛
+    let firstVisit = new Map();   // 客人 → 第一次來店日期
+    let period = "30d";
+
+    const C = {                   // 圖表顏色
+      bar: "#c2410c", barSoft: "#fdba74", line: "#1d4ed8",
+      todo: "#dc2626", doing: "#d97706", done: "#16a34a",
+      gray: "#9ca3af", grid: "#e5e7eb", axis: "#374151"
+    };
+    const WEEK = ["日", "一", "二", "三", "四", "五", "六"];
+
+    // ===== 小工具 =====
+    const $ = id => document.getElementById(id);
+    const dstr = d => d.toLocaleDateString("sv-SE");                 // 2026-11-20
+    const todayStr = () => dstr(new Date());
+    const addDays = (s, n) => { const d = new Date(s + "T00:00:00"); d.setDate(d.getDate() + n); return dstr(d); };
+    const dayDiff = (a, b) => Math.round((new Date(b + "T00:00:00") - new Date(a + "T00:00:00")) / 864e5);
+    const money = n => "$" + Math.round(n || 0).toLocaleString();
+    const pct = (a, b) => b ? Math.round(a / b * 100) : 0;
+    const inRange = (s, r) => !!s && s >= r.start && s <= r.end;
+    const revDate = r => r.completed_at ? dstr(new Date(r.completed_at)) : r.date;   // 營收算在完成那天
+    const custKey = r => { const b = bikeMap.get(r.bike_id); return b && b.customer_id ? "c" + b.customer_id : "b" + r.bike_id; };
+
+    function el(tag, className, text) {
+      const e = document.createElement(tag);
+      if (className) e.className = className;
+      if (text !== undefined) e.textContent = text;
+      return e;
+    }
+    // 金額外面包一層，按「隱藏金額」時會模糊掉
+    function moneyEl(n, tag = "span") { return el(tag, "money", money(n)); }
+
+    function niceMax(v) {
+      if (v <= 0) return 1;
+      const p = Math.pow(10, Math.floor(Math.log10(v)));
+      const n = v / p;
+      return (n <= 1 ? 1 : n <= 2 ? 2 : n <= 5 ? 5 : 10) * p;
+    }
+    function shortNum(n) {
+      if (n >= 10000) return (n / 10000).toFixed(n % 10000 ? 1 : 0) + "萬";
+      if (n >= 1000) return (n / 1000).toFixed(n % 1000 ? 1 : 0) + "千";
+      return String(Math.round(n));
+    }
+
+    async function fetchAll(makeQuery) {
+      const size = 1000;
+      let all = [];
+      for (let from = 0; ; from += size) {
+        const { data, error } = await makeQuery().range(from, from + size - 1);
+        if (error) throw error;
+        all = all.concat(data);
+        if (data.length < size) return all;
+      }
+    }
+
+    // ===== 讀資料 =====
+    async function loadData() {
+      try {
+        [records, bikes, appts] = await Promise.all([
+          fetchAll(() => db.from("service_records").select("id, bike_id, date, mileage, items, total, status, created_at, completed_at").order("id")),
+          fetchAll(() => db.from("bikes").select("id, plate, model, year, customer_id").order("id")),
+          fetchAll(() => db.from("appointments").select("id, date, status").order("id"))
+        ]);
+      } catch (e) {
+        alert("讀取失敗：" + e.message);
+        return;
+      }
+      bikeMap = new Map(bikes.map(b => [b.id, b]));
+      firstVisit = new Map();
+      records.forEach(r => {
+        if (!r.date) return;
+        const k = custKey(r);
+        if (!firstVisit.has(k) || r.date < firstVisit.get(k)) firstVisit.set(k, r.date);
+      });
+      renderAll();
+      renderRetention();
+    }
+
+    // ===== 期間 =====
+    function getRange(p) {
+      const t = todayStr();
+      const now = new Date();
+      const firstDate = records.map(r => r.date).filter(Boolean).sort()[0] || t;
+      switch (p) {
+        case "7d": return { start: addDays(t, -6), end: t, label: "近 7 天" };
+        case "30d": return { start: addDays(t, -29), end: t, label: "近 30 天" };
+        case "90d": return { start: addDays(t, -89), end: t, label: "近 3 個月" };
+        case "month": return { start: t.slice(0, 8) + "01", end: t, label: "本月", monthly: true };
+        case "lastmonth": {
+          const s = dstr(new Date(now.getFullYear(), now.getMonth() - 1, 1));
+          const e = dstr(new Date(now.getFullYear(), now.getMonth(), 0));
+          return { start: s, end: e, label: "上月", monthly: true };
+        }
+        case "year": return { start: t.slice(0, 4) + "-01-01", end: t, label: "今年", yearly: true };
+        default: return { start: firstDate, end: t, label: "全部", all: true };
+      }
+    }
+    // 上一個同樣長度的期間，拿來比較
+    function prevRange(r) {
+      if (r.all) return null;
+      if (r.yearly) {                                    // 今年 vs 去年同一段日期
+        const back = s => (Number(s.slice(0, 4)) - 1) + s.slice(4);
+        return { start: back(r.start), end: back(r.end) === back(r.end).slice(0, 5) + "02-29" ? back(r.end).slice(0, 5) + "02-28" : back(r.end) };
+      }
+      if (r.monthly) {
+        const d = new Date(r.start + "T00:00:00");
+        const s = dstr(new Date(d.getFullYear(), d.getMonth() - 1, 1));
+        const len = dayDiff(r.start, r.end);
+        const monthEnd = dstr(new Date(d.getFullYear(), d.getMonth(), 0));
+        const e = addDays(s, len) < monthEnd ? addDays(s, len) : monthEnd;   // 本月到今天 vs 上月同期
+        return { start: s, end: e };
+      }
+      const len = dayDiff(r.start, r.end) + 1;
+      return { start: addDays(r.start, -len), end: addDays(r.start, -1) };
+    }
+
+    // ===== 計算一段期間的指標 =====
+    function compute(r) {
+      const orders = records.filter(x => inRange(x.date, r));
+      const done = records.filter(x => x.status === "已完成" && inRange(revDate(x), r));
+      const revenue = done.reduce((s, x) => s + (x.total || 0), 0);
+      const paid = done.filter(x => (x.total || 0) > 0);
+      const visitSet = new Set(orders.map(x => x.bike_id + "|" + x.date));
+      const people = new Set(orders.map(custKey));
+      let newCount = 0;
+      people.forEach(k => { if (inRange(firstVisit.get(k), r)) newCount++; });
+      const hours = done
+        .filter(x => x.created_at && x.completed_at)
+        .map(x => (new Date(x.completed_at) - new Date(x.created_at)) / 36e5)
+        .filter(h => h > 0 && h < 24 * 14)
+        .sort((a, b) => a - b);
+      return {
+        orders, done, revenue, visits: visitSet.size,
+        ticket: paid.length ? revenue / paid.length : 0,
+        people: people.size, newCount, returning: people.size - newCount,
+        medianHours: hours.length ? hours[Math.floor(hours.length / 2)] : null
+      };
+    }
+
+    // ===== 畫全部 =====
+    function renderAll() {
+      const r = getRange(period);
+      const pr = prevRange(r);
+      const cur = compute(r);
+      // 前一段期間比最早的資料還早，比較起來沒有意義（例如資料從去年 11 月才開始）
+      const firstDate = records.map(x => x.date).filter(Boolean).sort()[0];
+      const partial = pr && firstDate && pr.start < firstDate;
+      const prev = pr && !partial ? compute(pr) : null;
+      const days = dayDiff(r.start, r.end) + 1;
+      $("rangeText").textContent = `${r.label}：${r.start} ～ ${r.end}（${days} 天）` + (pr && !partial ? `，與前一段 ${pr.start} ～ ${pr.end} 比較` : pr ? "（前一段期間的資料不足，不做比較）" : "");
+
+      renderKpis(cur, prev, days, partial);
+      renderTrend(r, cur);
+      renderWeek(r, cur);
+      renderHour(cur);
+      renderItems(cur);
+      renderStatus(cur);
+      renderCustomers(cur);
+      renderTop(cur);
+      renderBikes(cur);
+      renderAppts(r);
+    }
+
+    // ----- 重點數字 -----
+    function renderKpis(cur, prev, days, partial) {
+      const box = $("kpis");
+      box.innerHTML = "";
+      const items = [
+        { label: "營收", value: cur.revenue, fmt: money, money: true, prev: prev && prev.revenue },
+        { label: "來客數", value: cur.visits, fmt: n => n + " 台次", prev: prev && prev.visits },
+        { label: "工單數", value: cur.orders.length, fmt: n => n + " 張", prev: prev && prev.orders.length },
+        { label: "客單價", value: cur.ticket, fmt: money, money: true, prev: prev && prev.ticket },
+        { label: "新客", value: cur.newCount, fmt: n => n + " 位", prev: prev && prev.newCount },
+        { label: "平均每日來客", value: cur.visits / days, fmt: n => n.toFixed(1) + " 台", prev: prev && prev.visits / days },
+        { label: "維修時間（中位數）", value: cur.medianHours, fmt: h => h == null ? "-" : h < 1 ? Math.round(h * 60) + " 分鐘" : h.toFixed(1) + " 小時", prev: prev && prev.medianHours, lowerBetter: true }
+      ];
+      items.forEach((k, i) => {
+        const card = el("div", "kpi");
+        card.style.setProperty("--i", i);
+        card.append(el("div", "kpi-label", k.label));
+        const v = el("div", "kpi-value" + (k.money ? " money" : ""), k.fmt(k.value));
+        card.append(v);
+        if (k.prev != null && k.value != null && k.prev > 0) {
+          const change = (k.value - k.prev) / k.prev * 100;
+          const good = k.lowerBetter ? change < 0 : change > 0;
+          const flat = Math.abs(change) < 0.5;
+          const d = el("div", "kpi-delta " + (flat ? "flat" : good ? "up" : "down"),
+            (flat ? "持平" : (change > 0 ? "▲ " : "▼ ") + Math.abs(change).toFixed(0) + "%") + " vs 前期");
+          card.append(d);
+        } else if (k.prev != null) {
+          card.append(el("div", "kpi-delta flat", "前期無資料"));
+        } else if (partial) {
+          card.append(el("div", "kpi-delta flat", "前期資料不足"));
+        }
+        box.append(card);
+      });
+    }
+
+    // ----- 趨勢（長條＝營收、折線＝來客） -----
+    function renderTrend(r, cur) {
+      const days = dayDiff(r.start, r.end) + 1;
+      const unit = days <= 35 ? "day" : days <= 190 ? "week" : "month";
+      const keyOf = s => {
+        if (unit === "day") return s;
+        if (unit === "month") return s.slice(0, 7);
+        const d = new Date(s + "T00:00:00");
+        return addDays(s, -((d.getDay() + 6) % 7));      // 那一週的星期一
+      };
+      // 依單位列出每一格
+      const keys = [];
+      let s = keyOf(r.start);
+      while (s <= r.end) {
+        keys.push(s);
+        if (unit === "day") s = addDays(s, 1);
+        else if (unit === "week") s = addDays(s, 7);
+        else { const d = new Date(s + "-01T00:00:00"); s = dstr(new Date(d.getFullYear(), d.getMonth() + 1, 1)).slice(0, 7); }
+      }
+      const rev = Object.fromEntries(keys.map(k => [k, 0]));
+      const vis = Object.fromEntries(keys.map(k => [k, new Set()]));
+      cur.done.forEach(x => { const k = keyOf(revDate(x)); if (k in rev) rev[k] += x.total || 0; });
+      cur.orders.forEach(x => { const k = keyOf(x.date); if (k in vis) vis[k].add(x.bike_id + "|" + x.date); });
+
+      const labels = keys.map(k => unit === "month" ? `${Number(k.slice(5, 7))}月` : `${Number(k.slice(5, 7))}/${Number(k.slice(8))}`);
+      const tipLabels = keys.map(k => unit === "day" ? `${k}（${WEEK[new Date(k + "T00:00:00").getDay()]}）` : unit === "week" ? `${k} 那週` : `${k.slice(0, 4)} 年 ${Number(k.slice(5))} 月`);
+      const revs = keys.map(k => rev[k]);
+      const viss = keys.map(k => vis[k].size);
+      comboChart($("trendChart"), labels, tipLabels, revs, viss);
+
+      const unitName = { day: "天", week: "週", month: "月" }[unit];
+      const best = viss.indexOf(Math.max(...viss));
+      $("trendInsight").textContent = cur.visits
+        ? `每一格是一${unitName}。來客最多的是 ${tipLabels[best]}，共 ${viss[best]} 台次。`
+        : "這段期間沒有工單。";
+    }
+
+    // ----- 星期 -----
+    function renderWeek(r, cur) {
+      const visits = [0, 0, 0, 0, 0, 0, 0], occ = [0, 0, 0, 0, 0, 0, 0];
+      new Set(cur.orders.map(x => x.bike_id + "|" + x.date)).forEach(v => visits[new Date(v.split("|")[1] + "T00:00:00").getDay()]++);
+      for (let s = r.start; s <= r.end; s = addDays(s, 1)) occ[new Date(s + "T00:00:00").getDay()]++;
+      const order = [1, 2, 3, 4, 5, 6, 0];                    // 從星期一排到星期日
+      const avg = order.map(d => occ[d] ? visits[d] / occ[d] : 0);
+      barChart($("weekChart"), order.map(d => "週" + WEEK[d]), avg, { fmt: v => v.toFixed(1), tip: (l, v) => `${l} 平均 ${v.toFixed(1)} 台` });
+      const bi = avg.indexOf(Math.max(...avg)), li = avg.indexOf(Math.min(...avg.filter(v => v > 0)));
+      $("weekInsight").textContent = cur.visits
+        ? `週${WEEK[order[bi]]}最忙，平均 ${avg[bi].toFixed(1)} 台；週${WEEK[order[li]]}最空，平均 ${avg[li].toFixed(1)} 台。`
+        : "這段期間沒有工單。";
+    }
+
+    // ----- 時段（只算當天開的單；舊 Excel 匯入的單沒有真正的開單時間） -----
+    function renderHour(cur) {
+      const from = 8, to = 21;
+      const counts = Array(to - from + 1).fill(0);
+      let n = 0;
+      cur.orders.forEach(x => {
+        if (!x.created_at || !x.date) return;
+        const d = new Date(x.created_at);
+        if (dstr(d) !== x.date) return;
+        const h = Math.min(to, Math.max(from, d.getHours()));
+        counts[h - from]++; n++;
+      });
+      barChart($("hourChart"), counts.map((_, i) => String(from + i)), counts, { fmt: v => v, tip: (l, v) => `${l}:00～${l}:59 開了 ${v} 張單`, color: C.line });
+      const bi = counts.indexOf(Math.max(...counts));
+      $("hourInsight").textContent = n ? `${from + bi} 點最多人進來開單（${counts[bi]} 張），可以安排人手。` : "這段期間沒有當天開單的紀錄。";
+    }
+
+    // ----- 熱門項目 -----
+    function renderItems(cur) {
+      const count = {};
+      cur.orders.forEach(x => {
+        new Set((x.items || "").replace(/（.*?）|\(.*?\)/g, "").split(/[、,，\/+＋\s]+/).map(w => w.trim()).filter(w => w && w !== "（未填項目）"))
+          .forEach(w => count[w] = (count[w] || 0) + 1);
+      });
+      const list = Object.entries(count).sort((a, b) => b[1] - a[1]).slice(0, 10);
+      hbars($("itemBars"), list.map(([k, v]) => ({ label: k, value: v, text: `${v} 次・${pct(v, cur.orders.length)}%` })));
+      $("itemInsight").textContent = list.length
+        ? `${list[0][0]}最常做，${pct(list[0][1], cur.orders.length)}% 的工單都有。`
+        : "這段期間沒有工單。";
+    }
+
+    // ----- 工單狀態 -----
+    function renderStatus(cur) {
+      const n = s => cur.orders.filter(x => x.status === s).length;
+      const segs = [
+        { label: "已完成", value: n("已完成"), color: C.done },
+        { label: "維修中", value: n("維修中"), color: C.doing },
+        { label: "待修", value: n("待修"), color: C.todo }
+      ];
+      donut($("statusDonut"), segs, String(cur.orders.length), "張工單");
+      const open = segs[1].value + segs[2].value;
+      $("statusInsight").textContent = cur.orders.length
+        ? (open ? `還有 ${open} 張沒完成（待修 ${segs[2].value}、維修中 ${segs[1].value}）。` : "全部工單都完成了。")
+        : "這段期間沒有工單。";
+    }
+
+    // ----- 新客、回頭客 -----
+    function renderCustomers(cur) {
+      donut($("custDonut"), [
+        { label: "回頭客", value: cur.returning, color: C.line },
+        { label: "新客", value: cur.newCount, color: C.bar }
+      ], String(cur.people), "位客人");
+      $("custInsight").textContent = cur.people
+        ? `${pct(cur.returning, cur.people)}% 是以前來過的客人，新客 ${cur.newCount} 位。`
+        : "這段期間沒有客人。";
+    }
+
+    // ----- 回流（全部資料） -----
+    function renderRetention() {
+      const byBike = new Map();
+      records.forEach(x => { if (x.date) { if (!byBike.has(x.bike_id)) byBike.set(x.bike_id, new Set()); byBike.get(x.bike_id).add(x.date); } });
+      let again = 0, sleeping = 0;
+      const gaps = [];
+      const t = todayStr();
+      byBike.forEach(set => {
+        const ds = [...set].sort();
+        if (ds.length >= 2) again++;
+        for (let i = 1; i < ds.length; i++) gaps.push(dayDiff(ds[i - 1], ds[i]));
+        if (dayDiff(ds[ds.length - 1], t) > 180) sleeping++;
+      });
+      gaps.sort((a, b) => a - b);
+      const box = $("retention");
+      box.innerHTML = "";
+      [
+        { v: byBike.size + " 台", l: "來過的車輛" },
+        { v: pct(again, byBike.size) + "%", l: "來過 2 次以上（回訪率）" },
+        { v: gaps.length ? gaps[Math.floor(gaps.length / 2)] + " 天" : "-", l: "兩次來店的間隔（中位數）" },
+        { v: sleeping + " 台", l: "超過半年沒來" }
+      ].forEach((k, i) => {
+        const d = el("div", "mini-kpi");
+        d.style.setProperty("--i", i);
+        d.append(el("b", "", k.v), el("span", "", k.l));
+        box.append(d);
+      });
+    }
+
+    // ----- 消費最高的車輛 -----
+    function renderTop(cur) {
+      const spend = new Map();
+      cur.done.forEach(x => {
+        const s = spend.get(x.bike_id) || { total: 0, dates: new Set() };
+        s.total += x.total || 0;
+        s.dates.add(x.date);
+        spend.set(x.bike_id, s);
+      });
+      const list = [...spend.entries()].filter(([, s]) => s.total > 0).sort((a, b) => b[1].total - a[1].total).slice(0, 10);
+      const body = $("topBikes");
+      body.innerHTML = "";
+      if (!list.length) {
+        const tr = el("tr"); const td = el("td", "empty", "這段期間沒有已完成且有金額的工單"); td.colSpan = 6; tr.append(td); body.append(tr);
+      }
+      list.forEach(([id, s], i) => {
+        const b = bikeMap.get(id) || {};
+        const tr = el("tr");
+        tr.style.setProperty("--i", i);
+        tr.onclick = () => location.href = "app.html?plate=" + encodeURIComponent(b.plate || "");
+        const plate = el("td"); plate.append(el("span", "plate", b.plate || "?"));
+        const m = el("td", "r"); m.append(moneyEl(s.total));
+        const sh = el("td", "r money", pct(s.total, cur.revenue) + "%");
+        tr.append(el("td", "muted", i + 1), plate, el("td", "", b.model || "未填"), el("td", "r", s.dates.size + " 次"), m, sh);
+        body.append(tr);
+      });
+      const top3 = list.slice(0, 3).reduce((a, [, s]) => a + s.total, 0);
+      $("topInsight").textContent = list.length >= 3 ? `前 3 名貢獻了 ${pct(top3, cur.revenue)}% 的營收。點一下可以打開那台車。` : "點一下可以打開那台車。";
+    }
+
+    // ----- 車型、車齡、里程 -----
+    function renderBikes(cur) {
+      const ids = new Set(cur.orders.map(x => x.bike_id));
+      const vb = [...ids].map(id => bikeMap.get(id)).filter(Boolean);
+
+      const mc = {};
+      vb.forEach(b => { const m = (b.model || "未填車型").trim(); mc[m] = (mc[m] || 0) + 1; });
+      const ml = Object.entries(mc).sort((a, b) => b[1] - a[1]);
+      const top = ml.slice(0, 7);
+      const rest = ml.slice(7).reduce((s, [, v]) => s + v, 0);
+      if (rest) top.push(["其他", rest]);
+      hbars($("modelBars"), top.map(([k, v]) => ({ label: k, value: v, text: `${v} 台` })));
+
+      const y = new Date().getFullYear();
+      const ageB = [["2 年內", 0], ["3–5 年", 0], ["6–10 年", 0], ["10 年以上", 0], ["未填", 0]];
+      vb.forEach(b => {
+        if (!b.year) return ageB[4][1]++;
+        const a = y - b.year;
+        ageB[a <= 2 ? 0 : a <= 5 ? 1 : a <= 10 ? 2 : 3][1]++;
+      });
+      barChart($("ageChart"), ageB.map(a => a[0]), ageB.map(a => a[1]), { fmt: v => v, tip: (l, v) => `${l}：${v} 台`, height: 260 });
+
+      const kmB = [["5千內", 0], ["5千–1萬", 0], ["1–2萬", 0], ["2–3萬", 0], ["3–5萬", 0], ["5萬+", 0]];
+      cur.orders.forEach(x => {
+        const k = x.mileage;
+        if (!k) return;
+        kmB[k < 5000 ? 0 : k < 10000 ? 1 : k < 20000 ? 2 : k < 30000 ? 3 : k < 50000 ? 4 : 5][1]++;
+      });
+      barChart($("kmChart"), kmB.map(a => a[0]), kmB.map(a => a[1]), { fmt: v => v, tip: (l, v) => `${l} 公里：${v} 張工單`, color: C.line, height: 260 });
+    }
+
+    // ----- 預約 -----
+    function renderAppts(r) {
+      const t = todayStr();
+      const list = appts.filter(a => inRange(a.date, r));
+      const arrived = list.filter(a => a.status === "已到店").length;
+      const cancel = list.filter(a => a.status === "取消").length;
+      const noshow = list.filter(a => a.status === "預約中" && a.date < t).length;
+      const upcoming = list.filter(a => a.status === "預約中" && a.date >= t).length;
+      donut($("apptDonut"), [
+        { label: "已到店", value: arrived, color: C.done },
+        { label: "取消", value: cancel, color: C.gray },
+        { label: "沒來", value: noshow, color: C.todo },
+        { label: "還沒到", value: upcoming, color: C.line }
+      ], String(list.length), "筆預約");
+      const closed = arrived + cancel + noshow;
+      const box = $("apptKpis");
+      box.innerHTML = "";
+      [
+        { v: closed ? pct(arrived, closed) + "%" : "-", l: "到店率" },
+        { v: closed ? pct(noshow, closed) + "%" : "-", l: "沒來也沒取消" },
+        { v: upcoming + " 筆", l: "接下來的預約" }
+      ].forEach((k, i) => {
+        const d = el("div", "mini-kpi");
+        d.style.setProperty("--i", i);
+        d.append(el("b", "", k.v), el("span", "", k.l));
+        box.append(d);
+      });
+      $("apptInsight").textContent = list.length
+        ? `${list.length} 筆預約中，${arrived} 筆有來店` + (noshow ? `，${noshow} 筆沒來也沒取消。` : "。")
+        : "這段期間沒有預約。";
+    }
+
+    // ====================================================================
+    // ===== 圖表（自己用 SVG 畫，不需要外部套件） =====
+    // ====================================================================
+    const SVGNS = "http://www.w3.org/2000/svg";
+    function s(tag, attrs = {}, text) {
+      const e = document.createElementNS(SVGNS, tag);
+      for (const k in attrs) e.setAttribute(k, attrs[k]);
+      if (text !== undefined) e.textContent = text;
+      return e;
+    }
+
+    // 滑鼠移上去的小提示
+    const tip = $("tip");
+    function showTip(evt, nodes) {
+      tip.innerHTML = "";
+      nodes.forEach(n => tip.append(typeof n === "string" ? el("div", "", n) : n));
+      tip.hidden = false;
+      const x = Math.min(window.innerWidth - tip.offsetWidth - 8, evt.clientX + 14);
+      const y = Math.max(8, evt.clientY - tip.offsetHeight - 10);
+      tip.style.transform = `translate(${x}px, ${y}px)`;
+    }
+    function hideTip() { tip.hidden = true; }
+
+    // 營收長條 + 來客折線（左軸金額、右軸台次）
+    function comboChart(box, labels, tipLabels, bars, line) {
+      box.innerHTML = "";
+      const W = Math.max(320, box.clientWidth), H = 280;
+      const m = { l: 56, r: 40, t: 16, b: 36 };
+      const iw = W - m.l - m.r, ih = H - m.t - m.b;
+      const maxB = niceMax(Math.max(...bars, 1)), maxL = niceMax(Math.max(...line, 1));
+      const svg = s("svg", { viewBox: `0 0 ${W} ${H}`, width: "100%", class: "svg-chart", role: "img", "aria-label": "營收與來客趨勢" });
+      const n = labels.length, step = iw / n, bw = Math.max(2, Math.min(36, step * 0.62));
+
+      for (let i = 0; i <= 4; i++) {                      // 格線與兩側刻度
+        const y = m.t + ih - ih * i / 4;
+        svg.append(s("line", { x1: m.l, x2: W - m.r, y1: y, y2: y, class: "grid" }));
+        svg.append(s("text", { x: m.l - 8, y: y + 4, "text-anchor": "end", class: "tick money" }, "$" + shortNum(maxB * i / 4)));
+        svg.append(s("text", { x: W - m.r + 8, y: y + 4, class: "tick" }, shortNum(maxL * i / 4)));
+      }
+      const every = Math.ceil(n / Math.floor(iw / 44));    // 標籤太擠就隔幾個顯示
+      labels.forEach((l, i) => {
+        if (i % every === 0) svg.append(s("text", { x: m.l + step * (i + 0.5), y: H - 12, "text-anchor": "middle", class: "tick" }, l));
+      });
+
+      const gBars = s("g", { class: "money-shape" });
+      bars.forEach((v, i) => {
+        const h = ih * v / maxB;
+        const r = s("rect", { x: m.l + step * (i + 0.5) - bw / 2, y: m.t + ih - h, width: bw, height: Math.max(0, h), rx: Math.min(4, bw / 3), fill: C.bar, class: "grow" });
+        r.style.setProperty("--d", (i * 18) + "ms");
+        gBars.append(r);
+      });
+      svg.append(gBars);
+
+      const pts = line.map((v, i) => [m.l + step * (i + 0.5), m.t + ih - ih * v / maxL]);
+      if (pts.length > 1) svg.append(s("path", { d: "M" + pts.map(p => p.join(",")).join("L"), fill: "none", stroke: C.line, "stroke-width": 2.5, "stroke-linejoin": "round", "stroke-linecap": "round", pathLength: 1, class: "draw" }));
+      pts.forEach((p, i) => {
+        if (n <= 40) {
+          const c = s("circle", { cx: p[0], cy: p[1], r: 3.5, fill: "#fff", stroke: C.line, "stroke-width": 2, class: "pop" });
+          c.style.setProperty("--d", (300 + i * 18) + "ms");
+          svg.append(c);
+        }
+      });
+
+      const hover = s("line", { y1: m.t, y2: m.t + ih, class: "hover-line" });
+      hover.style.opacity = 0;
+      svg.append(hover);
+      labels.forEach((l, i) => {                            // 透明的感應區
+        const hit = s("rect", { x: m.l + step * i, y: m.t, width: step, height: ih, fill: "transparent" });
+        hit.addEventListener("mousemove", e => {
+          hover.setAttribute("x1", m.l + step * (i + 0.5)); hover.setAttribute("x2", m.l + step * (i + 0.5)); hover.style.opacity = 1;
+          const mv = el("div"); mv.append("營收 ", moneyEl(bars[i]));
+          showTip(e, [el("b", "", tipLabels[i]), mv, `來客 ${line[i]} 台次`]);
+        });
+        hit.addEventListener("mouseleave", () => { hover.style.opacity = 0; hideTip(); });
+        svg.append(hit);
+      });
+      box.append(svg);
+    }
+
+    // 直條圖
+    function barChart(box, labels, values, opt = {}) {
+      box.innerHTML = "";
+      const W = Math.max(260, box.clientWidth), H = opt.height || 240;
+      const m = { l: 12, r: 12, t: 24, b: 30 };
+      const iw = W - m.l - m.r, ih = H - m.t - m.b;
+      const max = Math.max(...values, 0) || 1;
+      const n = labels.length, step = iw / n, bw = Math.min(48, step * 0.66);
+      const best = values.indexOf(Math.max(...values));
+      const svg = s("svg", { viewBox: `0 0 ${W} ${H}`, width: "100%", class: "svg-chart", role: "img" });
+      svg.append(s("line", { x1: m.l, x2: W - m.r, y1: m.t + ih, y2: m.t + ih, class: "axis" }));
+      const color = opt.color || C.bar;
+      values.forEach((v, i) => {
+        const h = ih * v / max, x = m.l + step * (i + 0.5);
+        const r = s("rect", { x: x - bw / 2, y: m.t + ih - h, width: bw, height: Math.max(0, h), rx: 5, fill: color, "fill-opacity": i === best && v > 0 ? 1 : 0.55, class: "grow" });
+        r.style.setProperty("--d", (i * 45) + "ms");
+        r.addEventListener("mousemove", e => showTip(e, [opt.tip(labels[i], v)]));
+        r.addEventListener("mouseleave", hideTip);
+        svg.append(r);
+        if (v > 0) {
+          const t = s("text", { x, y: m.t + ih - h - 6, "text-anchor": "middle", class: "val fade" }, opt.fmt(v));
+          t.style.setProperty("--d", (250 + i * 45) + "ms");
+          svg.append(t);
+        }
+        svg.append(s("text", { x, y: H - 10, "text-anchor": "middle", class: "tick" }, labels[i]));
+      });
+      box.append(svg);
+    }
+
+    // 橫條清單（HTML，字比較好排）
+    function hbars(box, rows) {
+      box.innerHTML = "";
+      if (!rows.length) { box.append(el("p", "empty", "沒有資料")); return; }
+      const max = Math.max(...rows.map(r => r.value));
+      rows.forEach((r, i) => {
+        const row = el("div", "hbar");
+        row.style.setProperty("--i", i);
+        const top = el("div", "hbar-top");
+        top.append(el("span", "hbar-label", r.label), el("span", "hbar-val", r.text));
+        const track = el("div", "hbar-track");
+        const fill = el("div", "hbar-fill");
+        fill.style.setProperty("--w", (r.value / max * 100) + "%");
+        track.append(fill);
+        row.append(top, track);
+        box.append(row);
+      });
+    }
+
+    // 甜甜圈圖
+    function donut(box, segs, center, sub) {
+      box.innerHTML = "";
+      const total = segs.reduce((a, b) => a + b.value, 0);
+      const svg = s("svg", { viewBox: "0 0 120 120", class: "donut", role: "img" });
+      svg.append(s("circle", { cx: 60, cy: 60, r: 46, fill: "none", stroke: C.grid, "stroke-width": 14 }));
+      let acc = 0;
+      segs.forEach((g, i) => {
+        if (!g.value) return;
+        const len = g.value / total * 100;
+        const c = s("circle", { cx: 60, cy: 60, r: 46, fill: "none", stroke: g.color, "stroke-width": 14, pathLength: 100,
+          "stroke-dasharray": "0 100", "stroke-dashoffset": -acc, transform: "rotate(-90 60 60)", class: "seg" });
+        c.style.transitionDelay = (i * 120) + "ms";
+        requestAnimationFrame(() => requestAnimationFrame(() => c.setAttribute("stroke-dasharray", `${Math.max(0, len - 0.6)} ${100 - len + 0.6}`)));
+        c.addEventListener("mousemove", e => showTip(e, [`${g.label}：${g.value}（${pct(g.value, total)}%）`]));
+        c.addEventListener("mouseleave", hideTip);
+        svg.append(c);
+        acc += len;
+      });
+      svg.append(s("text", { x: 60, y: 60, "text-anchor": "middle", class: "donut-num" }, center));
+      svg.append(s("text", { x: 60, y: 76, "text-anchor": "middle", class: "donut-sub" }, sub));
+      const legend = el("ul", "donut-legend");
+      segs.forEach(g => {
+        const li = el("li");
+        const sw = el("i"); sw.style.background = g.color;
+        li.append(sw, el("span", "", g.label), el("b", "", `${g.value}`), el("small", "", total ? pct(g.value, total) + "%" : "-"));
+        legend.append(li);
+      });
+      box.append(svg, legend);
+    }
+
+    // ===== 操作 =====
+    $("periodChips").addEventListener("click", e => {
+      const b = e.target.closest("button");
+      if (!b) return;
+      document.querySelectorAll("#periodChips button").forEach(x => x.classList.toggle("active", x === b));
+      period = b.dataset.p;
+      hideTip();
+      renderAll();
+    });
+
+    function toggleMoney() {
+      const hidden = document.body.classList.toggle("hide-money");
+      $("moneyBtn").textContent = hidden ? "顯示金額" : "隱藏金額";
+    }
+
+    // 視窗大小改變時重畫（等使用者拉完再畫）
+    let resizeTimer;
+    let lastWidth = window.innerWidth;
+    window.addEventListener("resize", () => {
+      if (window.innerWidth === lastWidth) return;
+      lastWidth = window.innerWidth;
+      clearTimeout(resizeTimer);
+      resizeTimer = setTimeout(() => records.length && renderAll(), 250);
+    });
+
+    async function checkLogin() {
+      const { data } = await db.auth.getSession();
+      if (!data.session) {
+        location.href = "index.html";
+        return;
+      }
+      loadData();
+    }
+    checkLogin();
+  </script>
+</body>
+</html>

@@ -1,0 +1,1635 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>竹北榮詮管理系統</title>
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#111827">
+  <link rel="icon" href="icon-192.png">
+  <link rel="apple-touch-icon" href="icon-180.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&display=swap">
+  <link rel="stylesheet" href="style.css">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="config.js"></script>
+  <script src="ui.js" defer></script>
+</head>
+<body>
+  <!-- 上方標題列 -->
+  <header class="topbar">
+    <a class="brand" href="app.html">竹北榮詮<span>管理系統</span></a>
+    <div class="user">
+      <span id="who"></span>
+      <button class="btn-ghost" onclick="openRevenue()" title="今日營收">＄</button>
+      <button class="btn-ghost" onclick="location.href='customers.html'">客戶查詢</button>
+      <button class="btn-ghost" onclick="location.href='bikes.html'">車輛總覽</button>
+      <button class="btn-ghost" onclick="location.href='analytics.html'">數據分析</button>
+      <button class="btn-ghost" onclick="location.href='import.html'">匯入／備份</button>
+      <button class="btn-ghost" onclick="logout()">登出</button>
+    </div>
+  </header>
+
+  <main class="container layout">
+    <!-- 中間：工作區（查詢和車輛資料） -->
+    <div class="content">
+      <!-- 車牌查詢 -->
+      <section class="card">
+        <h2>車牌查詢</h2>
+        <div class="search">
+          <input id="plateInput" placeholder="輸入車牌，例如 ABC-1234"
+                 onkeydown="if (event.key === 'Enter') searchPlate()">
+          <button class="btn" onclick="searchPlate()">查詢</button>
+        </div>
+        <p class="msg" id="msg"></p>
+      </section>
+
+      <!-- 找不到車：新車建檔 -->
+      <section class="card" id="newBikeBox" hidden>
+        <div class="bike-head">
+          <h2 style="margin:0">新車建檔</h2>
+          <span class="plate" id="newPlate"></span>
+        </div>
+        <h3>車輛資料</h3>
+        <div class="form-grid">
+          <label>車型 <small>選填</small><input id="model" placeholder="例如：勁戰六代"></label>
+          <label>年份 <small>選填</small><input type="number" id="year" onchange="rocToAD(this)"></label>
+          <label>目前里程（公里）<small>選填</small><input type="number" id="bikeKm"></label>
+        </div>
+        <h3>車主資料</h3>
+        <div class="form-grid">
+          <label>姓名 <small>選填</small><input id="ownerName"></label>
+          <label>電話 <small>選填</small><input id="ownerPhone"></label>
+        </div>
+        <div class="form-actions">
+          <button class="btn" onclick="createBike()">建立</button>
+        </div>
+      </section>
+
+      <!-- 找到車：車輛資料和工單 -->
+      <section class="card" id="bikeBox" hidden>
+        <div class="bike-head" id="bikeTitle"></div>
+        <p class="info" id="bikeInfo"></p>
+        <p class="appt-note" id="bikeAppt" hidden></p>
+
+        <!-- 登記／修改車主：填同一支電話，多台車就會連到同一位客戶 -->
+        <details class="owner-edit">
+          <summary>登記／修改車主</summary>
+          <div class="form-grid">
+            <label>姓名<input id="editOwnerName"></label>
+            <label>電話<input id="editOwnerPhone" placeholder="已經有的客戶，打電話就會連起來"></label>
+          </div>
+          <div class="form-actions">
+            <button class="btn-small" onclick="setOwner()">儲存車主</button>
+          </div>
+        </details>
+
+        <!-- 修改車輛資料：車牌、車型、年份、里程，也可以刪除這台車 -->
+        <details class="owner-edit">
+          <summary>修改車輛資料</summary>
+          <div class="form-grid">
+            <label>車牌<input id="editPlate"></label>
+            <label>車型<input id="editModel"></label>
+            <label>年份<input id="editYear" type="number" onchange="rocToAD(this)"></label>
+            <label>里程（公里）<input id="editKm" type="number"></label>
+          </div>
+          <div class="form-actions">
+            <button class="btn-small" onclick="saveBike()">儲存車輛</button>
+            <button class="btn-small btn-danger" onclick="deleteBike()">刪除這台車</button>
+          </div>
+        </details>
+
+        <h3>新增工單</h3>
+        <div class="form-grid">
+          <label>日期<input type="date" id="rDate"></label>
+          <label>里程（公里）<input type="number" id="rKm"></label>
+          <label>常用項目
+            <select id="quickItem" onchange="addQuickItem()">
+              <option value="">選了會自動加入</option>
+            </select>
+          </label>
+          <label>項目<input id="rItems" placeholder="選常用項目或自己打"></label>
+          <label>零件<input id="rParts" placeholder="例如：機油 0.8L"></label>
+          <label>金額（元）<input type="number" id="rAmount"></label>
+          <label>下次保養里程<input type="number" id="rNext"></label>
+          <label>狀態
+            <select id="rStatus">
+              <option>待修</option>
+              <option>維修中</option>
+              <option>已完成</option>
+            </select>
+          </label>
+        </div>
+        <div class="form-actions">
+          <button class="btn" onclick="addRecord()">新增工單</button>
+        </div>
+
+        <h3>維修紀錄</h3>
+        <ul class="list" id="records"></ul>
+      </section>
+    </div>
+
+    <!-- 左邊：工作看板（寬螢幕時固定在最左邊） -->
+    <section class="card sidebar">
+      <h2>工作看板</h2>
+      <div class="stats">
+        <div class="stat clickable" onclick="openVisitors('today')" title="點一下看今天的來客名單">
+          <div class="num" id="statCount">0</div>
+          <div class="label">今日來客 ›</div>
+        </div>
+        <div class="stat clickable" onclick="openVisitors('month')" title="點一下看這個月的來客名單">
+          <div class="num" id="statMonth">0</div>
+          <div class="label">本月來客 ›</div>
+        </div>
+      </div>
+
+      <!-- 分頁：待修／維修中／今日完成 -->
+      <div class="tabs" id="boardTabs">
+        <button data-tab="todo" class="active">待修 <span id="cnt-todo">0</span></button>
+        <button data-tab="doing">維修中 <span id="cnt-doing">0</span></button>
+        <button data-tab="done">今日完成 <span id="cnt-done">0</span></button>
+      </div>
+      <ul class="list board-list" id="boardList"></ul>
+    </section>
+
+    <!-- 右邊：其他功能（之後的新功能放這裡） -->
+    <aside class="extra">
+      <!-- 今日預約 -->
+      <section class="card">
+        <div class="card-head">
+          <h2>預約</h2>
+          <button class="btn-small" onclick="openAppt()">＋ 新增</button>
+        </div>
+        <div class="day-nav">
+          <button class="btn-ghost" onclick="changeApptDay(-1)">‹</button>
+          <span id="apptDayLabel"></span>
+          <button class="btn-ghost" onclick="changeApptDay(1)">›</button>
+        </div>
+        <ul class="list compact" id="apptList"></ul>
+      </section>
+
+      <!-- 店內便條 -->
+      <section class="card">
+        <h2>店內便條</h2>
+        <div class="note-add">
+          <input id="noteInput" placeholder="寫點什麼，例如：ABC-1234 零件週五到"
+                 onkeydown="if (event.key === 'Enter') addNote()">
+          <button class="btn-small" onclick="addNote()">新增</button>
+        </div>
+        <ul class="list compact" id="noteList"></ul>
+        <button class="btn-link" onclick="clearDoneNotes()">清除已完成的便條</button>
+      </section>
+
+      <!-- 最近查詢 -->
+      <section class="card">
+        <h2>最近查詢</h2>
+        <ul class="list" id="recentList"></ul>
+      </section>
+    </aside>
+  </main>
+  
+  <!-- 新增預約 -->
+  <div class="modal" id="apptModal" hidden onclick="if (event.target === this) closeAppt()">
+    <div class="modal-box">
+      <div class="modal-head">
+        <h2>新增預約</h2>
+        <button class="btn-small" onclick="closeAppt()">取消</button>
+      </div>
+      <div class="form-grid">
+        <label>日期<input type="date" id="aDate"></label>
+        <label>時間<input type="time" id="aTime"></label>
+        <label>車牌<input id="aPlate" placeholder="例如 ABC-1234" onblur="lookupApptPlate()"></label>
+        <label>姓名<input id="aName"></label>
+        <label>電話<input id="aPhone"></label>
+        <label>項目<input id="aItems" placeholder="例如：換機油"></label>
+      </div>
+      <p class="info" id="aHint"></p>
+      <div class="form-actions">
+        <button class="btn" onclick="saveAppt()">儲存預約</button>
+      </div>
+    </div>
+  </div>
+
+  
+  <!-- 編輯工單：按維修紀錄的「編輯」才會打開 -->
+  <div class="modal" id="editModal" hidden onclick="if (event.target === this) closeEdit()">
+    <div class="modal-box">
+      <div class="modal-head">
+        <h2>編輯工單</h2>
+        <button class="btn-small" onclick="closeEdit()">取消</button>
+      </div>
+      <div class="form-grid">
+        <label>日期<input type="date" id="eDate"></label>
+        <label>里程（公里）<input type="number" id="eKm"></label>
+        <label>項目<input id="eItems"></label>
+        <label>零件<input id="eParts"></label>
+        <label>金額（元）<input type="number" id="eAmount"></label>
+        <label>下次保養里程<input type="number" id="eNext"></label>
+      </div>
+      <div class="form-actions">
+        <button class="btn" onclick="saveEdit()">儲存修改</button>
+      </div>
+    </div>
+  </div>
+
+  
+  <!-- 今日營收：平常藏起來，按右上角的 ＄ 才會打開 -->
+  <div class="modal" id="revenueModal" hidden onclick="if (event.target === this) closeRevenue()">
+    <div class="modal-box">
+      <div class="modal-head">
+        <h2>今日營收</h2>
+        <button class="btn-small" onclick="closeRevenue()">關閉</button>
+      </div>
+      <div class="stat">
+        <div class="num" id="revTotal">$0</div>
+        <div class="label" id="revSub">讀取中...</div>
+      </div>
+      <h3>已完成的消費紀錄</h3>
+      <ul class="list" id="revList"></ul>
+      <p class="info">1 分鐘後會自動關閉，也可以按 Esc 或點旁邊的空白處關閉。</p>
+    </div>
+  </div>
+
+  <!-- 通知車主：修好時傳簡訊或 LINE -->
+  <div class="modal" id="notifyModal" hidden onclick="if (event.target === this) closeNotify()">
+    <div class="modal-box">
+      <div class="modal-head">
+        <h2>通知車主來取車</h2>
+        <button class="btn-small" onclick="closeNotify()">不用通知</button>
+      </div>
+      <p class="info" id="notifyTo"></p>
+      <label>訊息內容（可以直接修改）
+        <textarea id="notifyText" rows="5"></textarea>
+      </label>
+      <div class="notify-actions">
+        <a class="btn" id="notifySms" onclick="markNotified()">傳簡訊</a>
+        <a class="btn btn-line" id="notifyLine" target="_blank" rel="noopener" onclick="markNotified()">用 LINE 傳</a>
+        <button class="btn-small" onclick="copyNotify()">複製訊息</button>
+      </div>
+      <p class="info">「傳簡訊」要用手機按才會打開簡訊；在電腦上請用「複製訊息」或 LINE。LINE 要對方是老闆 LINE 的好友才收得到。</p>
+    </div>
+  </div>
+
+  <!-- 來客名單：點工作看板的「今日來客」「本月來客」打開 -->
+  <div class="modal" id="visitModal" hidden onclick="if (event.target === this) closeVisitors()">
+    <div class="modal-box modal-wide">
+      <div class="modal-head">
+        <h2 id="visitTitle">今日來客</h2>
+        <button class="btn-small" onclick="closeVisitors()">關閉</button>
+      </div>
+      <p class="info" id="visitSub">讀取中…</p>
+      <input id="visitFilter" placeholder="搜尋車牌、車型、車主、項目" oninput="renderVisitors()">
+      <div id="visitList"></div>
+      <p class="info">點一下那台車，就會打開它的資料；電話點一下才會顯示完整號碼。</p>
+    </div>
+  </div>
+
+  <script>
+    let currentBike = null;
+
+    // 狀態對應的顏色 class
+    const STATUS_CLASS = { "待修": "todo", "維修中": "doing", "已完成": "done" };
+
+    // 常用項目（照店裡的保養表），想增加或刪除直接改這裡
+    const COMMON_ITEMS = ["機油", "齒輪油", "空濾", "火星塞", "煞車皮", "煞車油", "輪胎", "皮帶", "普利珠", "電瓶"];
+
+    // 小工具：建立一個元素，順便設定 class 和文字
+    function el(tag, className, text) {
+      const e = document.createElement(tag);
+      if (className) e.className = className;
+      if (text !== undefined) e.textContent = text;
+      return e;
+    }
+
+    // 把常用項目放進下拉選單
+    function setupQuickItems() {
+      const select = document.getElementById("quickItem");
+      COMMON_ITEMS.forEach(name => select.appendChild(el("option", "", name)));
+    }
+
+    // 選了常用項目，就加進「項目」欄位（已經有的不會重複加）
+    function addQuickItem() {
+      const select = document.getElementById("quickItem");
+      const input = document.getElementById("rItems");
+      const name = select.value;
+      if (!name) return;
+      const list = input.value.split("、").map(s => s.trim()).filter(Boolean);
+      if (!list.includes(name)) list.push(name);
+      input.value = list.join("、");
+      select.value = ""; // 選完跳回預設，方便再選下一個
+    }
+
+    // 最近查詢的車（存在這台電腦的瀏覽器裡，最多 8 台）
+    function getRecent() {
+      try {
+        return JSON.parse(localStorage.getItem("recentPlates")) || [];
+      } catch {
+        return [];
+      }
+    }
+
+    function saveRecent(bike) {
+      const list = getRecent().filter(r => r.plate !== bike.plate); // 先拿掉舊的，再放到最前面
+      list.unshift({ plate: bike.plate, model: bike.model || "" });
+      try {
+        localStorage.setItem("recentPlates", JSON.stringify(list.slice(0, 8)));
+      } catch {}
+      showRecent();
+    }
+
+    function showRecent() {
+      const ul = document.getElementById("recentList");
+      ul.innerHTML = "";
+      const list = getRecent();
+      if (list.length === 0) {
+        ul.appendChild(el("li", "empty", "查詢過的車會出現在這裡"));
+        return;
+      }
+      list.forEach(r => {
+        const btn = el("button", "btn-small", "打開");
+        btn.onclick = () => openPlate(r.plate);
+        const li = el("li");
+        li.append(el("span", "plate", r.plate), el("div", "main sub", r.model || "未填車型"), btn);
+        ul.appendChild(li);
+      });
+    }
+
+    // 今天的日期，格式 2026-11-17
+    function today() {
+      return new Date().toLocaleDateString("sv-SE");
+    }
+
+    // 車牌統一格式：去掉空白和 -，全部轉大寫
+    function normalizePlate(text) {
+      return text.toUpperCase().replace(/[^A-Z0-9]/g, "");
+    }
+
+    async function checkLogin() {
+      const { data } = await db.auth.getSession();
+      if (!data.session) {
+        location.href = "index.html";
+        return;
+      }
+      document.getElementById("who").textContent = data.session.user.email;
+      loadDashboard();
+
+      loadAppointments();
+      loadNotes();
+      // 每 1 分鐘自動更新一次（別台電腦或手機新增的資料也會出現）
+      setInterval(() => {
+        loadDashboard();
+        loadAppointments();
+        loadNotes();
+      }, 60000);      
+      // 從車輛總覽按「打開」過來時，自動查詢那台車
+      const plate = new URLSearchParams(location.search).get("plate");
+      if (plate) openPlate(plate);
+
+      // 超過 7 天沒備份，提醒一下
+      remindBackup();
+    }
+
+    // 用車牌查詢，順便把車主資料一起抓出來
+    async function searchPlate() {
+      const plate = normalizePlate(document.getElementById("plateInput").value);
+      const msg = document.getElementById("msg");
+      document.getElementById("newBikeBox").hidden = true;
+      document.getElementById("bikeBox").hidden = true;
+      if (!plate) {
+        msg.textContent = "請輸入車牌";
+        return;
+      }
+
+      const { data, error } = await db
+        .from("bikes")
+        .select("*, customers(*)")
+        .eq("plate", plate)
+        .maybeSingle();
+      if (error) {
+        msg.textContent = "查詢失敗：" + error.message;
+        return;
+      }
+
+      if (!data) {
+        msg.textContent = "查無此車，請建檔";
+        document.getElementById("newPlate").textContent = plate;
+        document.getElementById("newBikeBox").hidden = false;
+        return;
+      }
+      msg.textContent = "";
+      currentBike = data;
+      saveRecent(data);
+      showBike();
+    }
+
+    // 從看板直接打開某台車
+    function openPlate(plate) {
+      document.getElementById("plateInput").value = plate;
+      searchPlate();
+      window.scrollTo(0, 0);
+    }
+
+    // 用電話找現有客戶，找不到才新增
+    // 這樣同一位客戶的多台車，會連到同一筆客戶資料
+    async function findOrCreateCustomer(name, phone) {
+      const digits = phone.replace(/\D/g, "");
+      if (digits) {
+        // 直接請資料庫用「只留數字的電話」找，不用把全部客戶抓回來比對
+        const { data: found, error } = await db
+          .from("customers")
+          .select("id, name, phone")
+          .eq("phone_digits", digits)
+          .limit(1)
+          .maybeSingle();
+        if (error) {
+          alert("查詢客戶失敗：" + error.message);
+          return null;
+        }
+        if (found) {
+          if (name && found.name === "未填姓名") {
+            await db.from("customers").update({ name }).eq("id", found.id); // 補上姓名
+          } else if (name && name !== found.name) {
+            alert(`電話 ${phone} 已經是「${found.name}」的，這台車會登記在他名下。`);
+          }
+          return found.id;
+        }
+      }
+      const { data, error } = await db
+        .from("customers")
+        .insert({ name: name || "未填姓名", phone })
+        .select()
+        .single();
+      if (error) {
+        alert("建立車主失敗：" + error.message);
+        return null;
+      }
+      return data.id;
+    }
+
+    // 幫目前這台車登記或更換車主
+    async function setOwner() {
+      const name = document.getElementById("editOwnerName").value.trim();
+      const phone = document.getElementById("editOwnerPhone").value.trim();
+      if (!name && !phone) {
+        alert("請輸入車主姓名或電話");
+        return;
+      }
+      const warnings = [];
+      checkPhone(phone, warnings);
+      if (!confirmChecks([], warnings)) return;
+
+      const customerId = await findOrCreateCustomer(name, phone);
+      if (!customerId) return;
+
+      const { error } = await db.from("bikes").update({ customer_id: customerId }).eq("id", currentBike.id);
+      if (error) {
+        alert("儲存車主失敗：" + error.message);
+        return;
+      }
+      searchPlate(); // 重新讀一次，畫面上的車主就會更新
+    }
+
+    // 新車建檔：有填車主就順便建立客戶
+    async function createBike() {
+      const plate = document.getElementById("newPlate").textContent;
+      const ownerName = document.getElementById("ownerName").value.trim();
+      const ownerPhone = document.getElementById("ownerPhone").value.trim();
+
+      // 存檔前檢查：車牌、年份、里程、電話合不合理
+      const ok = checkBike({
+        plate,
+        year: Number(document.getElementById("year").value) || null,
+        km: Number(document.getElementById("bikeKm").value) || null,
+        phone: ownerPhone
+      });
+      if (!ok) return;
+
+      let customerId = null;
+
+      // 有填車主：電話已經存在就用那位客戶，沒有才新增
+      if (ownerName || ownerPhone) {
+        customerId = await findOrCreateCustomer(ownerName, ownerPhone);
+        if (!customerId) return;
+      }
+
+      const { error } = await db.from("bikes").insert({
+        plate,
+        customer_id: customerId,
+        model: document.getElementById("model").value.trim(),
+        year: Number(document.getElementById("year").value) || null,
+        mileage: Number(document.getElementById("bikeKm").value) || null
+      });
+      if (error) {
+        alert("建檔失敗：" + error.message);
+        return;
+      }
+
+      ["model", "year", "bikeKm", "ownerName", "ownerPhone"].forEach(id => {
+        document.getElementById(id).value = "";
+      });
+      document.getElementById("plateInput").value = plate;
+      searchPlate();
+    }
+
+    // 顯示車輛資料
+    function showBike() {
+      const b = currentBike;
+      const title = document.getElementById("bikeTitle");
+      title.innerHTML = "";
+      title.append(el("span", "plate", b.plate), el("span", "model", b.model || "未填車型"));
+
+      const owner = b.customers
+        ? `${b.customers.name}　${b.customers.phone || ""}`
+        : "未登記車主";
+      document.getElementById("bikeInfo").textContent =
+        `車主：${owner}｜年份：${b.year || "-"}｜目前里程：${b.mileage ?? "-"} 公里`;
+      // 把目前的車主帶進「登記／修改車主」表單
+      document.getElementById("editOwnerName").value = b.customers ? b.customers.name : "";
+      document.getElementById("editOwnerPhone").value = b.customers ? b.customers.phone || "" : "";
+      document.getElementById("editPlate").value = b.plate;
+      document.getElementById("editModel").value = b.model || "";
+      document.getElementById("editYear").value = b.year || "";
+      document.getElementById("editKm").value = b.mileage ?? "";
+
+      document.getElementById("rDate").value = today();
+      document.getElementById("bikeBox").hidden = false;
+      loadRecords();
+      loadBikeAppts();
+    }
+
+    // 讀出這台車的所有工單
+    async function loadRecords() {
+      const { data, error } = await db
+        .from("service_records")
+        .select("*")
+        .eq("bike_id", currentBike.id)
+        .order("date", { ascending: false, nullsFirst: false });
+      if (error) {
+        alert("讀取工單失敗：" + error.message);
+        return;
+      }
+      currentRecords = data; // 記下來，新增或修改工單時拿來比對里程
+
+      const list = document.getElementById("records");
+      list.innerHTML = "";
+      if (data.length === 0) {
+        list.appendChild(el("li", "empty", "還沒有紀錄"));
+        return;
+      }
+
+      data.forEach(r => {
+        const li = el("li");
+
+        const main = el("div", "main");
+        const notified = r.notified_at
+          ? `｜已通知 ${new Date(r.notified_at).toLocaleString("zh-TW", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit", hour12: false })}`
+          : "";
+        main.append(
+          el("div", "", r.items + (r.parts ? `（${r.parts}）` : "")),
+          el("div", "sub", `${r.date || "日期不明"}｜${r.mileage ?? "-"} 公里${notified}`)
+        );
+
+        // 狀態下拉選單，改了就直接存進資料庫，顏色也跟著變
+        const select = el("select", STATUS_CLASS[r.status]);
+        ["待修", "維修中", "已完成"].forEach(s => select.appendChild(el("option", "", s)));
+        select.value = r.status;
+        select.onchange = () => {
+          select.className = STATUS_CLASS[select.value];
+          updateStatus(r.id, select.value);
+        };
+
+        // 編輯、刪除按鈕
+        const editBtn = el("button", "btn-small", "編輯");
+        editBtn.onclick = () => openEdit(r);
+        const delBtn = el("button", "btn-small btn-danger", "刪除");
+        delBtn.onclick = () => deleteRecord(r.id);
+
+        // 已完成的工單：可以通知車主來取車
+        const notifyBtn = el("button", "btn-small btn-notify", r.notified_at ? "再通知" : "通知");
+        notifyBtn.onclick = () => openNotify(r);
+        notifyBtn.hidden = r.status !== "已完成";
+
+        li.append(main, el("div", "money", `$${(r.total || 0).toLocaleString()}`), select, notifyBtn, editBtn, delBtn);        list.appendChild(li);
+      });
+    }
+
+    // 改狀態；改成「已完成」時順便記下完成時間，「今日完成」就是靠這個算的
+    async function updateStatus(id, status) {
+      const completed_at = status === "已完成" ? new Date().toISOString() : null;
+      const { error } = await db.from("service_records").update({ status, completed_at }).eq("id", id);
+      if (error) {
+        alert("更新失敗：" + error.message);
+        return;
+      }
+      loadDashboard();
+      await loadRecords();
+      // 修好了：跳出通知視窗（車主有電話才跳）
+      const record = currentRecords.find(r => r.id === id);
+      if (status === "已完成" && record && currentBike.customers && currentBike.customers.phone) openNotify(record);
+    }
+
+    // 新增工單
+    async function addRecord() {
+      const items = document.getElementById("rItems").value.trim();
+      const km = Number(document.getElementById("rKm").value) || null;
+      if (!items) {
+        alert("請填寫維修項目");
+        return;
+      }
+
+      // 存檔前檢查：里程、日期、金額合不合理
+      const ok = checkRecord({
+        date: document.getElementById("rDate").value,
+        km,
+        amount: Number(document.getElementById("rAmount").value) || 0,
+        nextKm: Number(document.getElementById("rNext").value) || null,
+        status: document.getElementById("rStatus").value,
+        items
+      });
+      if (!ok) return;
+
+      const { error } = await db.from("service_records").insert({
+        bike_id: currentBike.id,
+        date: document.getElementById("rDate").value || undefined,
+        mileage: km,
+        items,
+        parts: document.getElementById("rParts").value.trim(),
+        total: Number(document.getElementById("rAmount").value) || 0,
+        next_service_km: Number(document.getElementById("rNext").value) || null,
+        status: document.getElementById("rStatus").value,
+        completed_at: document.getElementById("rStatus").value === "已完成" ? new Date().toISOString() : null
+      });
+      if (error) {
+        alert("新增失敗：" + error.message);
+        return;
+      }
+
+      // 如果這次的里程比較新，順便更新車輛的里程
+      if (km && km > (currentBike.mileage || 0)) {
+        await db.from("bikes").update({ mileage: km }).eq("id", currentBike.id);
+        currentBike.mileage = km;
+      }
+
+      ["rKm", "rItems", "rParts", "rAmount", "rNext"].forEach(id => {
+        document.getElementById(id).value = "";
+      });
+      document.getElementById("rStatus").value = "待修";
+      showBike();
+      loadDashboard();
+    }
+
+    // 工作看板：今日統計、待處理工單
+        // ===== 工作看板 =====
+    let boardTab = "todo";                       // 目前選的分頁
+    let board = { todo: [], doing: [], done: [] }; // 三個分頁的工單
+
+    // 分頁按鈕：按了就切換
+    function setupBoardTabs() {
+      document.querySelectorAll("#boardTabs button").forEach(btn => {
+        btn.onclick = () => {
+          boardTab = btn.dataset.tab;
+          document.querySelectorAll("#boardTabs button").forEach(b => b.classList.toggle("active", b === btn));
+          renderBoard();
+        };
+      });
+    }
+
+    // 讀資料：今日統計、還沒完成的工單、今天完成的工單
+    async function loadDashboard() {
+      // 1. 今日來客、本月來客（營收藏在右上角的 ＄ 按鈕裡）
+      const monthStart = today().slice(0, 7) + "-01"; // 這個月 1 號，例如 2026-11-01
+      const { data: monthRecords, error: e1 } = await db
+        .from("service_records")
+        .select("bike_id, date")
+        .gte("date", monthStart);
+      if (e1) {
+        alert("讀取看板失敗：" + e1.message);
+        return;
+      }
+      // 同一台車同一天只算一位客人
+      const todayVisitors = new Set(monthRecords.filter(r => r.date === today()).map(r => r.bike_id)).size;
+      const monthVisitors = new Set(monthRecords.map(r => r.bike_id + "|" + r.date)).size;
+      document.getElementById("statCount").textContent = todayVisitors;
+      document.getElementById("statMonth").textContent = monthVisitors;
+
+      // 2. 還沒完成的工單（待修＋維修中）
+      const { data: pending, error: e2 } = await db
+        .from("service_records")
+        .select("*, bikes(plate, model)")
+        .neq("status", "已完成")
+        .order("date");
+      if (e2) {
+        alert("讀取待處理工單失敗：" + e2.message);
+        return;
+      }
+
+      // 3. 今天完成的工單（從今天 00:00 開始算）
+      const startOfToday = new Date();
+      startOfToday.setHours(0, 0, 0, 0);
+      const { data: done, error: e3 } = await db
+        .from("service_records")
+        .select("*, bikes(plate, model)")
+        .eq("status", "已完成")
+        .gte("completed_at", startOfToday.toISOString())
+        .order("completed_at", { ascending: false });
+      if (e3) {
+        alert("讀取今日完成失敗：" + e3.message);
+        return;
+      }
+
+      board = {
+        todo: pending.filter(r => r.status === "待修"),
+        doing: pending.filter(r => r.status === "維修中"),
+        done
+      };
+      document.getElementById("cnt-todo").textContent = board.todo.length;
+      document.getElementById("cnt-doing").textContent = board.doing.length;
+      document.getElementById("cnt-done").textContent = board.done.length;
+      renderBoard();
+    }
+
+    // 顯示目前分頁的工單
+    function renderBoard() {
+      const ul = document.getElementById("boardList");
+      ul.innerHTML = "";
+      const list = board[boardTab];
+
+      if (list.length === 0) {
+        const emptyText = {
+          todo: "沒有待修的車。查詢車牌 → 新增工單，狀態選「待修」就會出現在這裡。",
+          doing: "目前沒有維修中的車。",
+          done: "今天還沒有完成的工單。"
+        };
+        ul.appendChild(el("li", "empty", emptyText[boardTab]));
+        return;
+      }
+
+      list.forEach(r => {
+        const main = el("div", "main");
+        // 今日完成：顯示完成時間和金額；其他：顯示車型和日期
+        const sub = boardTab === "done"
+          ? `${new Date(r.completed_at).toLocaleTimeString("zh-TW", { hour: "2-digit", minute: "2-digit", hour12: false })} 完成｜${r.bikes.model || "未填車型"}`
+          : `${r.bikes.model || "未填車型"}｜${r.date || "日期不明"}`;
+        main.append(el("div", "", r.items), el("div", "sub", sub));
+
+        const openBtn = el("button", "btn-small", "打開");
+        openBtn.onclick = () => openPlate(r.bikes.plate);
+
+        const li = el("li");
+        li.append(el("span", "plate", r.bikes.plate), main, openBtn);
+        ul.appendChild(li);
+      });
+    }
+    
+        // ===== 今日營收（藏在右上角，按了才打開）=====
+    let revenueTimer = null;
+
+    async function openRevenue() {
+      document.getElementById("revenueModal").hidden = false;
+      clearTimeout(revenueTimer);
+      revenueTimer = setTimeout(closeRevenue, 60000); // 1 分鐘後自動關閉，避免忘記關
+
+      // 今天完成的工單（從今天 00:00 開始算）
+      const startOfToday = new Date();
+      startOfToday.setHours(0, 0, 0, 0);
+      const { data, error } = await db
+        .from("service_records")
+        .select("*, bikes(plate, model)")
+        .eq("status", "已完成")
+        .gte("completed_at", startOfToday.toISOString())
+        .order("completed_at", { ascending: false });
+      if (error) {
+        alert("讀取營收失敗：" + error.message);
+        return;
+      }
+
+      const total = data.reduce((sum, r) => sum + (r.total || 0), 0);
+      document.getElementById("revTotal").textContent = `$${total.toLocaleString()}`;
+      document.getElementById("revSub").textContent = `今天完成 ${data.length} 筆`;
+
+      const ul = document.getElementById("revList");
+      ul.innerHTML = "";
+      if (data.length === 0) {
+        ul.appendChild(el("li", "empty", "今天還沒有完成的消費紀錄"));
+        return;
+      }
+      data.forEach(r => {
+        const time = new Date(r.completed_at).toLocaleTimeString("zh-TW", { hour: "2-digit", minute: "2-digit", hour12: false });
+        const main = el("div", "main");
+        main.append(el("div", "", r.items), el("div", "sub", `${time} 完成｜${r.bikes.model || "未填車型"}`));
+        const li = el("li");
+        li.append(el("span", "plate", r.bikes.plate), main, el("div", "money", `$${(r.total || 0).toLocaleString()}`));
+        ul.appendChild(li);
+      });
+    }
+
+    function closeRevenue() {
+      document.getElementById("revenueModal").hidden = true;
+      clearTimeout(revenueTimer);
+    }
+
+    // 按 Esc 也能關閉
+    document.addEventListener("keydown", e => {
+      if (e.key === "Escape") {
+        closeRevenue();
+        closeEdit();
+        closeAppt();
+        closeVisitors();
+        closeNotify();
+      }
+    });
+        // ===== 編輯、刪除工單 =====
+    let editingId = null; // 正在編輯哪一張工單
+
+    // 打開編輯視窗，把這張工單原本的內容填進去
+    function openEdit(r) {
+      editingId = r.id;
+      document.getElementById("eDate").value = r.date || "";
+      document.getElementById("eKm").value = r.mileage ?? "";
+      document.getElementById("eItems").value = r.items || "";
+      document.getElementById("eParts").value = r.parts || "";
+      document.getElementById("eAmount").value = r.total ?? "";
+      document.getElementById("eNext").value = r.next_service_km ?? "";
+      document.getElementById("editModal").hidden = false;
+    }
+
+    function closeEdit() {
+      document.getElementById("editModal").hidden = true;
+      editingId = null;
+    }
+
+    // 儲存修改（跟新增工單一樣的五步驟，只是 insert 換成 update）
+    async function saveEdit() {
+      // ① 拿輸入
+      const items = document.getElementById("eItems").value.trim();
+      const km = Number(document.getElementById("eKm").value) || null;
+
+      // ② 檢查
+      if (!items) {
+        alert("請填寫維修項目");
+        return;
+      }
+      const ok = checkRecord({
+        date: document.getElementById("eDate").value,
+        km,
+        amount: Number(document.getElementById("eAmount").value) || 0,
+        nextKm: Number(document.getElementById("eNext").value) || null,
+        items
+      }, editingId);
+      if (!ok) return;
+
+      // ③ 更新資料庫：只改 id 等於這張工單的那一筆
+      const { error } = await db.from("service_records").update({
+        date: document.getElementById("eDate").value || null,
+        mileage: km,
+        items,
+        parts: document.getElementById("eParts").value.trim(),
+        total: Number(document.getElementById("eAmount").value) || 0,
+        next_service_km: Number(document.getElementById("eNext").value) || null
+      }).eq("id", editingId);
+
+      // ④ 處理錯誤
+      if (error) {
+        alert("儲存失敗：" + error.message);
+        return;
+      }
+
+      // 里程改得比車輛目前里程還新，就順便更新車輛
+      if (km && km > (currentBike.mileage || 0)) {
+        await db.from("bikes").update({ mileage: km }).eq("id", currentBike.id);
+        currentBike.mileage = km;
+      }
+
+      // ⑤ 更新畫面
+      closeEdit();
+      showBike();
+      loadDashboard();
+    }
+
+    // 刪除工單：先確認，再刪
+    async function deleteRecord(id) {
+      if (!confirm("確定要刪除這張工單嗎？\n\n刪錯了可以在 180 天內，到「匯入／備份」最下面的垃圾桶救回。")) return;
+
+      const { error } = await db.from("service_records").delete().eq("id", id);
+      if (error) {
+        alert("刪除失敗：" + error.message);
+        return;
+      }
+      toast("已刪除。刪錯了可以到「匯入／備份」的垃圾桶救回", "ok");
+      showBike();
+      loadDashboard();
+    }
+        // ===== 預約 =====
+    let apptDay = today(); // 目前在看哪一天的預約
+
+    // 換到前一天或後一天
+    function changeApptDay(step) {
+      const d = new Date(apptDay + "T00:00");
+      d.setDate(d.getDate() + step);
+      apptDay = d.toLocaleDateString("sv-SE");
+      loadAppointments();
+    }
+
+    async function loadAppointments() {
+      const week = "日一二三四五六"[new Date(apptDay + "T00:00").getDay()];
+      const label = apptDay === today() ? "今天" : apptDay.slice(5).replace("-", "/");
+      document.getElementById("apptDayLabel").textContent = `${label}（${week}）`;
+
+      const { data, error } = await db
+        .from("appointments")
+        .select("*")
+        .eq("date", apptDay)
+        .order("time", { nullsFirst: false });
+      if (error) {
+        alert("讀取預約失敗：" + error.message);
+        return;
+      }
+
+      const ul = document.getElementById("apptList");
+      ul.innerHTML = "";
+      if (data.length === 0) {
+        ul.appendChild(el("li", "empty", "這天沒有預約"));
+        return;
+      }
+
+      data.forEach(a => {
+        const li = el("li", a.status === "預約中" ? "" : "faded"); // 已到店、取消的變淡
+        const main = el("div", "main");
+        // 第一行：時間、姓名、項目；第二行：車牌、電話、狀態
+        const line1 = [a.time ? a.time.slice(0, 5) : "--:--", a.name, a.items].filter(Boolean).join("　");
+        // 電話先遮起來，點一下才顯示完整號碼（客人可能看得到這個畫面）
+        const status = a.status !== "預約中" ? a.status : "";
+        const masked = [a.plate || "未填車牌", maskPhone(a.phone), status].filter(Boolean).join("｜");
+        const full = [a.plate || "未填車牌", a.phone, status].filter(Boolean).join("｜");
+        const sub = el("div", "sub", masked);
+        main.append(el("div", "", line1), sub);
+        if (a.phone) {
+          main.classList.add("reveal");
+          main.title = "點一下顯示／隱藏完整電話";
+          main.onclick = () => {
+            sub.textContent = sub.textContent === masked ? full : masked;
+          };
+        }
+        li.appendChild(main);
+
+        // 還在預約中的，才有「到店」和「取消」按鈕
+        if (a.status === "預約中") {
+          const arriveBtn = el("button", "btn-small", "到店");
+          arriveBtn.onclick = () => arriveAppt(a);
+          const cancelBtn = el("button", "btn-small btn-danger", "取消");
+          cancelBtn.onclick = () => cancelAppt(a.id);
+          li.append(arriveBtn, cancelBtn);
+        }
+        ul.appendChild(li);
+      });
+    }
+
+    function openAppt() {
+      ["aTime", "aPlate", "aName", "aPhone", "aItems"].forEach(id => {
+        document.getElementById(id).value = "";
+      });
+      document.getElementById("aDate").value = apptDay;
+      document.getElementById("aHint").textContent = "";
+      document.getElementById("apptModal").hidden = false;
+    }
+
+    function closeAppt() {
+      document.getElementById("apptModal").hidden = true;
+    }
+
+    async function saveAppt() {
+      const date = document.getElementById("aDate").value;
+      const plate = normalizePlate(document.getElementById("aPlate").value);
+      const name = document.getElementById("aName").value.trim();
+      if (!date) {
+        alert("請選擇日期");
+        return;
+      }
+      if (!plate && !name) {
+        alert("車牌和姓名至少填一個");
+        return;
+      }
+
+      // 存檔前檢查：日期是不是已經過了、電話格式、同一天是不是已經約過
+      const warnings = [];
+      if (date < today()) warnings.push(`預約日期 ${date} 已經過了`);
+      checkPhone(document.getElementById("aPhone").value, warnings);
+      if (plate) {
+        const { data: same } = await db
+          .from("appointments")
+          .select("id")
+          .eq("plate", plate)
+          .eq("date", date)
+          .eq("status", "預約中");
+        if (same && same.length) warnings.push(`${plate} 在 ${date} 已經有預約了，是不是重複新增？`);
+      }
+      if (!confirmChecks([], warnings)) return;
+
+      const { error } = await db.from("appointments").insert({
+        date,
+        time: document.getElementById("aTime").value || null,
+        plate: plate || null,
+        name,
+        phone: document.getElementById("aPhone").value.trim(),
+        items: document.getElementById("aItems").value.trim(),
+        source: "店內"
+      });
+      if (error) {
+        alert("新增預約失敗：" + error.message);
+        return;
+      }
+      closeAppt();
+      apptDay = date; // 跳到剛剛預約的那一天
+      loadAppointments();
+    }
+
+    // 客人到店：標記已到店，並直接打開那台車
+    async function arriveAppt(a) {
+      await db.from("appointments").update({ status: "已到店" }).eq("id", a.id);
+      loadAppointments();
+      if (!a.plate) return;
+
+      document.getElementById("plateInput").value = a.plate;
+      await searchPlate();
+
+      if (!document.getElementById("bikeBox").hidden) {
+        // 車已經建過檔：把預約的項目填進新增工單
+        if (a.items) document.getElementById("rItems").value = a.items;
+      } else {
+        // 還沒建檔：把預約時填的姓名、電話帶進新車建檔，不用再打一次
+        document.getElementById("ownerName").value = a.name || "";
+        document.getElementById("ownerPhone").value = a.phone || "";
+      }
+      window.scrollTo(0, 0);
+    }
+
+    // 新增預約時，輸入車牌後自動查這台車：已經建檔就帶出車主
+    async function lookupApptPlate() {
+      const plate = normalizePlate(document.getElementById("aPlate").value);
+      const hint = document.getElementById("aHint");
+      hint.textContent = "";
+      if (!plate) return;
+
+      const { data } = await db.from("bikes").select("*, customers(*)").eq("plate", plate).maybeSingle();
+      if (!data) {
+        hint.textContent = "這台車還沒建檔，到店時會自動帶到新車建檔。";
+        return;
+      }
+      if (!data.customers) {
+        hint.textContent = `已建檔（${data.model || "未填車型"}），還沒登記車主。`;
+        return;
+      }
+
+      const c = data.customers;
+      const nameInput = document.getElementById("aName");
+      const phoneInput = document.getElementById("aPhone");
+      // 姓名、電話還沒填，就幫忙帶入
+      if (!nameInput.value) nameInput.value = c.name || "";
+      if (!phoneInput.value) phoneInput.value = c.phone || "";
+
+      // 電話跟系統裡的車主不一樣，提醒一下
+      const same = phoneInput.value.replace(/\D/g, "") === (c.phone || "").replace(/\D/g, "");
+      hint.textContent = same
+        ? `已建檔：車主 ${c.name}　${c.phone || ""}`
+        : `⚠ 這台車登記的車主是 ${c.name}　${c.phone || ""}，跟你填的電話不一樣`;
+    }
+
+    // 打開一台車時，顯示它接下來的預約
+    async function loadBikeAppts() {
+      const box = document.getElementById("bikeAppt");
+      box.hidden = true;
+      const { data } = await db
+        .from("appointments")
+        .select("*")
+        .eq("plate", currentBike.plate)
+        .eq("status", "預約中")
+        .gte("date", today())
+        .order("date")
+        .order("time", { nullsFirst: false });
+      if (!data || data.length === 0) return;
+
+      box.textContent = "📅 預約：" + data
+        .map(a => `${a.date.slice(5).replace("-", "/")} ${a.time ? a.time.slice(0, 5) : ""} ${a.items || ""}`.trim())
+        .join("、");
+      box.hidden = false;
+    }
+
+    async function cancelAppt(id) {
+      if (!confirm("確定要取消這個預約嗎？")) return;
+      const { error } = await db.from("appointments").update({ status: "取消" }).eq("id", id);
+      if (error) {
+        alert("取消失敗：" + error.message);
+        return;
+      }
+      loadAppointments();
+    }
+
+    // ===== 店內便條 =====
+    async function loadNotes() {
+      const { data, error } = await db
+        .from("notes")
+        .select("*")
+        .order("done")                                // 還沒完成的排前面
+        .order("created_at", { ascending: false })    // 新的排前面
+        .limit(30);
+      if (error) {
+        alert("讀取便條失敗：" + error.message);
+        return;
+      }
+
+      const ul = document.getElementById("noteList");
+      ul.innerHTML = "";
+      if (data.length === 0) {
+        ul.appendChild(el("li", "empty", "還沒有便條"));
+        return;
+      }
+
+      data.forEach(n => {
+        const li = el("li", n.done ? "faded" : "");
+
+        // 打勾 = 完成
+        const check = document.createElement("input");
+        check.type = "checkbox";
+        check.checked = n.done;
+        check.onchange = () => toggleNote(n.id, check.checked);
+
+        const time = new Date(n.created_at).toLocaleString("zh-TW", {
+          month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit", hour12: false
+        });
+        const main = el("div", "main");
+        main.append(el("div", n.done ? "strike" : "", n.content), el("div", "sub", `${time}｜${n.author || ""}`));
+
+        const delBtn = el("button", "btn-icon", "×");
+        delBtn.title = "刪除";
+        delBtn.onclick = () => deleteNote(n.id);
+
+        li.append(check, main, delBtn);
+        ul.appendChild(li);
+      });
+    }
+
+    async function addNote() {
+      const input = document.getElementById("noteInput");
+      const content = input.value.trim();
+      if (!content) return;
+
+      // 記下是誰寫的（取 email @ 前面那段）
+      const who = document.getElementById("who").textContent.split("@")[0];
+      const { error } = await db.from("notes").insert({ content, author: who });
+      if (error) {
+        alert("新增便條失敗：" + error.message);
+        return;
+      }
+      input.value = "";
+      loadNotes();
+    }
+
+    async function toggleNote(id, done) {
+      await db.from("notes").update({ done }).eq("id", id);
+      loadNotes();
+    }
+
+    async function deleteNote(id) {
+      if (!confirm("確定要刪除這張便條嗎？")) return;
+      await db.from("notes").delete().eq("id", id);
+      loadNotes();
+    }
+
+    async function clearDoneNotes() {
+      if (!confirm("確定要清除所有已完成的便條嗎？")) return;
+      await db.from("notes").delete().eq("done", true);
+      loadNotes();
+    }
+    // ===== 修改車輛資料、刪除車輛 =====
+    async function saveBike() {
+      const oldPlate = currentBike.plate;
+      const plate = normalizePlate(document.getElementById("editPlate").value);
+      const model = document.getElementById("editModel").value.trim();
+      const year = Number(document.getElementById("editYear").value) || null;
+      const kmText = document.getElementById("editKm").value;
+      const km = kmText === "" ? null : Number(kmText);
+
+      if (!plate) return alert("車牌不能是空的");
+      // 跟建新車用同一套檢查（車牌格式、年份、里程）
+      if (!checkBike({ plate, year, km, phone: "" })) return;
+
+      // 換車牌：先確認新車牌沒有被別台車用掉
+      if (plate !== oldPlate) {
+        const { data: same } = await db.from("bikes").select("id").eq("plate", plate).maybeSingle();
+        if (same) return alert(`車牌 ${plate} 已經有另一台車在用了`);
+        if (!confirm(`確定要把車牌 ${oldPlate} 改成 ${plate} 嗎？`)) return;
+      }
+
+      const { error } = await db.from("bikes")
+        .update({ plate, model, year, mileage: km })
+        .eq("id", currentBike.id);
+      if (error) return alert("儲存失敗：" + error.message);
+
+      if (plate !== oldPlate) {
+        // 預約是用車牌文字對應的，一起改成新車牌
+        await db.from("appointments").update({ plate }).eq("plate", oldPlate);
+        // 「最近查詢」裡的舊車牌也拿掉
+        try {
+          localStorage.setItem("recentPlates", JSON.stringify(getRecent().filter(r => r.plate !== oldPlate)));
+        } catch {}
+      }
+      toast("車輛資料已更新", "ok");
+      document.getElementById("plateInput").value = plate;
+      searchPlate();
+      loadAppointments();
+    }
+
+    async function deleteBike() {
+      const n = currentRecords.length;
+      const ok = confirm(
+        `確定要刪除 ${currentBike.plate} 這台車嗎？\n\n` +
+        (n ? `它的 ${n} 張工單也會一起刪除。\n` : "") +
+        "刪錯了可以在 180 天內，到「匯入／備份」最下面的垃圾桶救回。"
+      );
+      if (!ok) return;
+      const plate = currentBike.plate;
+      const { error } = await db.from("bikes").delete().eq("id", currentBike.id);
+      if (error) return alert("刪除失敗：" + error.message);
+
+      try {
+        localStorage.setItem("recentPlates", JSON.stringify(getRecent().filter(r => r.plate !== plate)));
+      } catch {}
+      showRecent();
+      currentBike = null;
+      document.getElementById("bikeBox").hidden = true;
+      document.getElementById("plateInput").value = "";
+      toast(`已刪除 ${plate}。刪錯了可以到「匯入／備份」的垃圾桶救回`, "ok");
+      loadDashboard();
+    }
+
+    // ===== 修好了，通知車主 =====
+    const SHOP_NAME = "竹北榮詮";
+    let notifyRecord = null;
+
+    function openNotify(r) {
+      const owner = currentBike.customers;
+      if (!owner || !owner.phone) {
+        alert("這台車還沒登記車主電話，沒辦法通知。可以先在「登記／修改車主」填上電話。");
+        return;
+      }
+      notifyRecord = r;
+      const hello = owner.name && owner.name !== "未填姓名" ? `${owner.name} 您好` : "您好";
+      const money = r.total ? `，費用共 ${r.total.toLocaleString()} 元` : "";
+      document.getElementById("notifyText").value =
+        `【${SHOP_NAME}】${hello}，您的機車 ${currentBike.plate} 已經處理好了（${r.items}）${money}，可以來取車了。謝謝您！`;
+      document.getElementById("notifyTo").textContent = `傳給：${owner.name || "車主"}　${owner.phone}`;
+      updateNotifyLinks();
+      document.getElementById("notifyText").oninput = updateNotifyLinks;
+      document.getElementById("notifyModal").hidden = false;
+    }
+
+    // 訊息改了，簡訊和 LINE 的連結也要跟著換
+    function updateNotifyLinks() {
+      const text = document.getElementById("notifyText").value;
+      const phone = (currentBike.customers.phone || "").replace(/\D/g, "");
+      // 「?&body=」這種寫法 iPhone 和 Android 都看得懂
+      document.getElementById("notifySms").href = `sms:${phone}?&body=${encodeURIComponent(text)}`;
+      document.getElementById("notifyLine").href = `https://line.me/R/share?text=${encodeURIComponent(text)}`;
+    }
+
+    async function copyNotify() {
+      try {
+        await navigator.clipboard.writeText(document.getElementById("notifyText").value);
+        toast("訊息已複製，可以貼到簡訊或 LINE", "ok");
+        markNotified();
+      } catch {
+        alert("複製失敗，請直接選取訊息文字複製");
+      }
+    }
+
+    // 記下「什麼時候通知過」，工單上會顯示「已通知 11/20 18:30」
+    async function markNotified() {
+      if (!notifyRecord) return;
+      const id = notifyRecord.id;
+      notifyRecord = null;
+      setTimeout(closeNotify, 300); // 等連結打開再關視窗
+      const { error } = await db.from("service_records").update({ notified_at: new Date().toISOString() }).eq("id", id);
+      if (error) {
+        toast(/notified_at/.test(error.message)
+          ? "通知時間沒有記下來：請先在 Supabase 執行「老闆版_全新資料庫.sql」"
+          : "通知時間沒有記下來：" + error.message, "error");
+        return;
+      }
+      loadRecords();
+    }
+
+    function closeNotify() {
+      document.getElementById("notifyModal").hidden = true;
+    }
+
+    // ===== 來客名單 =====
+    // 「一位來客」＝同一台車同一天（跟工作看板的算法一樣），一位來客可能開了好幾張工單
+    let visits = [];
+    let visitMode = "today";
+
+    async function openVisitors(mode) {
+      visitMode = mode;
+      document.getElementById("visitModal").hidden = false;
+      document.getElementById("visitTitle").textContent = mode === "today" ? "今日來客" : "本月來客";
+      document.getElementById("visitSub").textContent = "讀取中…";
+      document.getElementById("visitFilter").value = "";
+      document.getElementById("visitList").innerHTML = "";
+
+      const start = mode === "today" ? today() : today().slice(0, 7) + "-01";
+      let rows = [];
+      // Supabase 一次最多給 1000 筆，一頁一頁拿
+      for (let from = 0; ; from += 1000) {
+        const { data, error } = await db
+          .from("service_records")
+          .select("id, bike_id, date, items, status, mileage, created_at, bikes(plate, model, customers(name, phone))")
+          .gte("date", start)
+          .lte("date", today())
+          .order("date", { ascending: false })
+          .order("id", { ascending: false })
+          .range(from, from + 999);
+        if (error) {
+          alert("讀取來客名單失敗：" + error.message);
+          return;
+        }
+        rows = rows.concat(data);
+        if (data.length < 1000) break;
+      }
+
+      // 合併成「一台車一天一筆」
+      const map = new Map();
+      rows.forEach(r => {
+        const key = r.bike_id + "|" + r.date;
+        if (!map.has(key)) map.set(key, { bikeId: r.bike_id, date: r.date, bike: r.bikes || {}, orders: [] });
+        map.get(key).orders.push(r);
+      });
+      visits = [...map.values()];
+
+      // 這個月第幾次來
+      const seen = {};
+      [...visits].reverse().forEach(v => {
+        seen[v.bikeId] = (seen[v.bikeId] || 0) + 1;
+        v.nth = seen[v.bikeId];
+      });
+      renderVisitors();
+    }
+
+    function renderVisitors() {
+      const box = document.getElementById("visitList");
+      const keyword = document.getElementById("visitFilter").value.trim().toUpperCase();
+      box.innerHTML = "";
+
+      const list = visits.filter(v => {
+        if (!keyword) return true;
+        const owner = v.bike.customers || {};
+        const text = [v.bike.plate, v.bike.model, owner.name, ...v.orders.map(o => o.items)].join(" ").toUpperCase();
+        return text.includes(keyword) || text.replace(/[^A-Z0-9]/g, "").includes(keyword.replace(/[^A-Z0-9]/g, ""));
+      });
+
+      const bikes = new Set(visits.map(v => v.bikeId)).size;
+      const orders = visits.reduce((s, v) => s + v.orders.length, 0);
+      document.getElementById("visitSub").textContent = visitMode === "today"
+        ? `今天 ${visits.length} 位來客，開了 ${orders} 張工單`
+        : `這個月 ${visits.length} 位來客（${bikes} 台不同的車），開了 ${orders} 張工單`;
+
+      if (list.length === 0) {
+        box.appendChild(el("p", "empty", visits.length ? "找不到符合的來客" : "還沒有來客"));
+        return;
+      }
+
+      // 本月：照日期分組；今天：只有一組
+      const byDate = new Map();
+      list.forEach(v => {
+        if (!byDate.has(v.date)) byDate.set(v.date, []);
+        byDate.get(v.date).push(v);
+      });
+      byDate.forEach((items, date) => {
+        if (visitMode === "month") {
+          const week = "日一二三四五六"[new Date(date + "T00:00").getDay()];
+          box.appendChild(el("h3", "visit-day", `${date.slice(5).replace("-", "/")}（${week}）　${items.length} 位`));
+        }
+        const ul = el("ul", "list visit-list");
+        items.forEach(v => ul.appendChild(visitItem(v)));
+        box.appendChild(ul);
+      });
+    }
+
+    // 一位來客的一行
+    function visitItem(v) {
+      const owner = v.bike.customers;
+      const li = el("li", "clickable-row");
+      li.title = "點一下打開這台車";
+      li.onclick = () => {
+        closeVisitors();
+        openPlate(v.bike.plate);
+      };
+
+      // 第一行：做了哪些項目（同一天開好幾張單就合在一起）
+      const items = [...new Set(v.orders.flatMap(o => (o.items || "").split("、")).filter(Boolean))].join("、");
+      const main = el("div", "main");
+      main.append(el("div", "", items || "（未填項目）"));
+
+      // 第二行：時間、車型、車主、電話（遮起來）、第幾次來
+      const first = [...v.orders].sort((a, b) => (a.created_at || "").localeCompare(b.created_at || ""))[0];
+      const opened = first.created_at && new Date(first.created_at).toLocaleDateString("sv-SE") === v.date
+        ? new Date(first.created_at).toLocaleTimeString("zh-TW", { hour: "2-digit", minute: "2-digit", hour12: false }) + " 進來"
+        : "";
+      const sub = el("div", "sub");
+      const parts = [opened, v.bike.model || "未填車型", owner ? owner.name : "未登記車主"].filter(Boolean);
+      sub.append(parts.join("｜"));
+      if (owner && owner.phone) {
+        const phone = el("span", "reveal visit-phone", "｜" + maskPhone(owner.phone));
+        phone.title = "點一下顯示完整電話";
+        phone.onclick = e => {
+          e.stopPropagation(); // 只換電話，不要打開車輛
+          phone.textContent = phone.textContent.includes("*") ? "｜" + owner.phone : "｜" + maskPhone(owner.phone);
+        };
+        sub.append(phone);
+      }
+      if (visitMode === "month" && v.nth > 1) sub.append(`｜本月第 ${v.nth} 次`);
+      if (v.orders.length > 1) sub.append(`｜${v.orders.length} 張工單`);
+      main.append(sub);
+
+      // 右邊：狀態（有一張還沒好，就顯示那個狀態）
+      const order = ["待修", "維修中", "已完成"];
+      const status = order.find(s => v.orders.some(o => o.status === s)) || "已完成";
+      li.append(el("span", "plate", v.bike.plate || "?"), main, el("span", "badge " + STATUS_CLASS[status], status));
+      return li;
+    }
+
+    function closeVisitors() {
+      document.getElementById("visitModal").hidden = true;
+    }
+
+    // ===== 年份：打民國年自動換成西元 =====
+    // 例如打 112 → 2023（1～200 都當成民國年）
+    function rocToAD(input) {
+      const v = Number(input.value);
+      if (Number.isInteger(v) && v >= 1 && v <= 200) {
+        input.value = v + 1911;
+        toast(`已把民國 ${v} 年換成西元 ${v + 1911} 年`, "ok");
+      }
+    }
+
+    // ===== 電話遮罩 =====
+    // 只露出前 4 碼和後 3 碼，例如 0912345678 → 0912-***-678
+    function maskPhone(phone) {
+      const d = (phone || "").replace(/\D/g, "");
+      if (d.length < 7) return phone || "";
+      return `${d.slice(0, 4)}-***-${d.slice(-3)}`;
+    }
+
+    // ===== 畫面右下角的小提示（取代 alert 跳出視窗）=====
+    function toast(message, type = "error") {
+      let box = document.getElementById("toastBox");
+      if (!box) {
+        box = el("div");
+        box.id = "toastBox";
+        document.body.appendChild(box);
+      }
+      // 一樣的訊息已經在畫面上，就不要再疊一個（例如斷線時每分鐘自動更新失敗）
+      if ([...box.children].some(t => t.textContent === message)) return;
+
+      const t = el("div", "toast " + type, message);
+      box.appendChild(t);
+      setTimeout(() => t.remove(), 4000); // 4 秒後自動消失
+    }
+
+    // 程式裡原本所有的 alert(...)，都改成用小提示顯示
+    window.alert = message => toast(message, "error");
+
+    // ===== 防止按兩下 =====
+    // 把一個函式「包起來」：執行中再按一次會被忽略，做完才能再按
+    function locked(fn) {
+      let running = false;
+      return async function (...args) {
+        if (running) return;
+        running = true;
+        document.body.classList.add("busy");
+        try {
+          return await fn(...args);
+        } finally {
+          running = false;
+          document.body.classList.remove("busy");
+        }
+      };
+    }
+
+    // 這些是「會新增或修改資料」的按鈕，全部加上防連點
+    ["addRecord", "createBike", "saveEdit", "setOwner", "saveAppt", "saveBike", "deleteBike", "addNote"].forEach(name => {
+      window[name] = locked(window[name]);
+    });
+    
+    // ===== 輸入檢查：存檔前先看看資料合不合理 =====
+    // errors（錯誤）：一定不能存，例如金額是負數
+    // warnings（提醒）：可能打錯，先問一下，按「確定」還是可以存
+
+    let currentRecords = []; // 目前這台車的工單（loadRecords 讀進來的）
+
+    // 統一處理檢查結果：有錯誤就擋下來，有提醒就問一下
+    function confirmChecks(errors, warnings) {
+      if (errors.length) {
+        alert(errors.join("；"));
+        return false;
+      }
+      if (warnings.length) {
+        return confirm("請確認以下資料：\n\n• " + warnings.join("\n• ") + "\n\n確定要儲存嗎？");
+      }
+      return true;
+    }
+
+    // 電話：台灣手機（09 開頭 10 碼）或市話（0 開頭 9～10 碼）
+    function checkPhone(phone, warnings) {
+      const d = (phone || "").replace(/\D/g, "");
+      if (!d) return;
+      const mobile = /^09\d{8}$/.test(d);
+      const landline = /^0[2-8]\d{7,8}$/.test(d);
+      if (!mobile && !landline) warnings.push(`電話「${phone}」看起來不像台灣的手機或市話號碼`);
+    }
+
+    // 新車建檔：車牌、年份、里程、電話
+    function checkBike({ plate, year, km, phone }) {
+      const errors = [], warnings = [];
+      const thisYear = new Date().getFullYear();
+
+      if (!/^[A-Z0-9]{4,8}$/.test(plate) || !/[A-Z]/.test(plate) || !/[0-9]/.test(plate)) {
+        warnings.push(`車牌「${plate}」看起來不像台灣的車牌（通常是英文加數字）`);
+      }
+      if (year && (year < 1950 || year > thisYear + 1)) errors.push(`年份 ${year} 不合理`);
+      if (km !== null && km < 0) errors.push("里程不能是負數");
+      if (km > 300000) warnings.push(`里程 ${km.toLocaleString()} 公里很高，是不是多打了一個 0？`);
+      checkPhone(phone, warnings);
+      return confirmChecks(errors, warnings);
+    }
+
+    // 工單：里程、日期、金額、下次保養里程、重複開單
+    // editingId：編輯工單時傳入這張工單的編號，比對時要把它自己排除
+    function checkRecord({ date, km, amount, nextKm, status, items }, editingId = null) {
+      const errors = [], warnings = [];
+
+      if (amount < 0) errors.push("金額不能是負數");
+      if (km !== null && km < 0) errors.push("里程不能是負數");
+      if (date && date > today()) warnings.push(`日期 ${date} 是未來的日子`);
+
+      if (km) {
+        // 同一台車的其他工單，分成「這次之前」和「這次之後」
+        const others = currentRecords.filter(r => r.id !== editingId && r.mileage && r.date);
+        const before = others.filter(r => !date || r.date <= date);
+        const after = others.filter(r => date && r.date > date);
+
+        // 之前的紀錄裡最大的里程（如果這是最新的一筆，也要跟車輛目前的里程比）
+        let maxBefore = Math.max(0, ...before.map(r => r.mileage));
+        if (!after.length && !editingId) maxBefore = Math.max(maxBefore, currentBike.mileage || 0);
+        // 之後的紀錄裡最小的里程
+        const minAfter = Math.min(Infinity, ...after.map(r => r.mileage));
+
+        if (km < maxBefore) {
+          warnings.push(`里程 ${km.toLocaleString()} 公里比之前的紀錄（${maxBefore.toLocaleString()} 公里）還少，里程應該只會增加`);
+        }
+        if (km > minAfter) {
+          warnings.push(`里程 ${km.toLocaleString()} 公里比之後日期的紀錄（${minAfter.toLocaleString()} 公里）還多`);
+        }
+        if (maxBefore && km - maxBefore > 30000) {
+          warnings.push(`里程比上一次多了 ${(km - maxBefore).toLocaleString()} 公里，是不是多打了一個 0？`);
+        }
+      }
+
+      if (nextKm && km && nextKm <= km) {
+        warnings.push(`下次保養里程（${nextKm.toLocaleString()}）沒有比這次的里程（${km.toLocaleString()}）多`);
+      }
+      if (status === "已完成" && !amount) {
+        warnings.push("狀態是「已完成」但金額是 0，今日營收不會算到這筆");
+      }
+      if (date && items) {
+        const dup = currentRecords.find(r => r.id !== editingId && r.date === date && r.items === items);
+        if (dup) warnings.push(`${date} 已經有一張「${items}」的工單了，是不是重複新增？`);
+      }
+      return confirmChecks(errors, warnings);
+    }
+
+    // ===== 備份提醒 =====
+    function remindBackup() {
+      let last = null;
+      try {
+        last = localStorage.getItem("lastBackup");
+      } catch {}
+      const days = last ? Math.floor((Date.now() - new Date(last)) / 86400000) : null;
+      if (days === null || days >= 7) {
+        toast(last
+          ? `已經 ${days} 天沒有備份了，記得到「匯入／備份」按一鍵備份`
+          : "這台電腦還沒有備份過，記得到「匯入／備份」按一鍵備份", "error");
+      }
+    }
+
+    async function logout() {
+      await db.auth.signOut({ scope: "local" }); // 只登出這一台，其他裝置不受影響
+      location.href = "index.html";
+    }
+
+    setupQuickItems();
+    setupBoardTabs();
+    showRecent();
+    checkLogin();
+  </script>
+</body>
+</html>
