@@ -1,5 +1,5 @@
-const SUPABASE_URL = "https://uqcjyralyukkdawzgbrc.supabase.co";
-const SUPABASE_KEY = "sb_publishable_AbtXZ2lhjEqe-32_MKUhvg_Woyf3v1h";
+const SUPABASE_URL = "https://kqkezlofptqgybevuehf.supabase.co";   // 老闆版專用的資料庫
+const SUPABASE_KEY = "sb_publishable_t5CB75GK5SDeZq4Jhkb-WQ_-1CfodVX";
 const db = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
 
