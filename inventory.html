@@ -1,0 +1,699 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>庫存 - 竹北榮詮管理系統</title>
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#0b1120">
+  <link rel="icon" href="icon-192.png">
+  <link rel="apple-touch-icon" href="icon-180.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&display=swap">
+  <link rel="stylesheet" href="style.css">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="config.js"></script>
+  <script src="ui.js" defer></script>
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="app.html">竹北榮詮<span>管理系統</span></a>
+    <div class="user">
+      <button class="btn-ghost" onclick="location.href='app.html'">主畫面</button>
+      <button class="btn-ghost" onclick="location.href='customers.html'">客戶查詢</button>
+      <button class="btn-ghost" onclick="location.href='bikes.html'">車輛總覽</button>
+      <button class="btn-ghost" onclick="location.href='inventory.html'">庫存</button>
+      <button class="btn-ghost" onclick="location.href='analytics.html'">數據分析</button>
+      <button class="btn-ghost" onclick="location.href='import.html'">匯入／備份</button>
+    </div>
+  </header>
+
+  <main class="container wide">
+    <section class="card">
+      <div class="card-head">
+        <h2>庫存管理</h2>
+        <button class="btn" onclick="openPart()">＋ 新增零件</button>
+      </div>
+      <div class="mini-kpis inv-kpis">
+        <div class="mini-kpi"><b id="kParts">-</b><span>零件種類</span></div>
+        <div class="mini-kpi warn clickable" onclick="showTab('order')"><b id="kLow">-</b><span>要叫貨 ›</span></div>
+        <div class="mini-kpi clickable" onclick="showTab('order')"><b id="kPending">-</b><span>叫貨中、還沒到 ›</span></div>
+        <div class="mini-kpi"><b id="kSuppliers">-</b><span>廠商</span></div>
+      </div>
+      <div class="tabs inv-tabs" id="invTabs">
+        <button data-tab="stock" class="active">庫存清單</button>
+        <button data-tab="order">叫貨 <span id="tLow">0</span></button>
+        <button data-tab="suppliers">廠商</button>
+        <button data-tab="moves">進出紀錄</button>
+      </div>
+      <p class="msg" id="msg"></p>
+    </section>
+
+    <!-- 1. 庫存清單 -->
+    <section class="card tab-panel" id="panel-stock">
+      <div class="inv-tools">
+        <input id="q" placeholder="搜尋品名、規格（例如：空濾、勁戰）" oninput="renderParts()">
+        <label class="check"><input type="checkbox" id="onlyLow" onchange="renderParts()"> 只看要叫貨的</label>
+        <label class="check"><input type="checkbox" id="showInactive" onchange="renderParts()"> 顯示停用的</label>
+      </div>
+      <div class="chips cat-chips" id="catChips"></div>
+      <ul class="list inv-list" id="partList"><li class="empty">讀取中…</li></ul>
+    </section>
+
+    <!-- 2. 叫貨 -->
+    <section class="card tab-panel" id="panel-order" hidden>
+      <h2>建議叫貨</h2>
+      <p class="info">庫存「小於或等於安全庫存」的零件會列在這裡，依廠商分好。數量預設補到安全庫存的 2 倍，可以自己改。</p>
+      <div id="suggest"></div>
+
+      <h2 class="mt">叫貨中、還沒到</h2>
+      <p class="info">貨到了按「到貨入庫」，數量會自動加進庫存。</p>
+      <ul class="list" id="pendingList"></ul>
+
+      <h2 class="mt">最近到貨</h2>
+      <ul class="list" id="doneList"></ul>
+    </section>
+
+    <!-- 3. 廠商 -->
+    <section class="card tab-panel" id="panel-suppliers" hidden>
+      <div class="card-head">
+        <h2>廠商</h2>
+        <button class="btn-small" onclick="openSupplier()">＋ 新增廠商</button>
+      </div>
+      <ul class="list" id="supplierList"></ul>
+    </section>
+
+    <!-- 4. 進出紀錄 -->
+    <section class="card tab-panel" id="panel-moves" hidden>
+      <div class="card-head">
+        <h2>進出紀錄</h2>
+        <div class="inv-tools tight">
+          <select id="movePart" onchange="loadMoves()"><option value="">全部零件</option></select>
+          <select id="moveReason" onchange="loadMoves()">
+            <option value="">全部原因</option>
+            <option>進貨</option><option>工單使用</option><option>盤點調整</option>
+            <option>期初</option><option>退貨</option><option>其他</option>
+          </select>
+        </div>
+      </div>
+      <p class="info">最近 200 筆。綠色是進來、紅色是出去。工單刪掉時，那張單用掉的零件會自動加回庫存。</p>
+      <ul class="list" id="moveList"></ul>
+    </section>
+  </main>
+
+  <!-- 新增／編輯零件 -->
+  <div class="modal" id="partModal" hidden onclick="if (event.target === this) closeModals()">
+    <div class="modal-box">
+      <div class="modal-head">
+        <h2 id="partTitle">新增零件</h2>
+        <button class="btn-small" onclick="closeModals()">取消</button>
+      </div>
+      <div class="form-grid">
+        <label>品名<input id="pName" placeholder="例如：空濾"></label>
+        <label>規格<input id="pSpec" placeholder="例如：勁戰六代、10W-40 1L"></label>
+        <label>分類<input id="pCategory" list="catList" placeholder="例如：機油、輪胎"></label>
+        <label>單位<input id="pUnit" list="unitList" placeholder="瓶、顆、條、組"></label>
+        <label>安全庫存（低於就要叫貨）<input id="pSafety" type="number" min="0"></label>
+        <label>售價（元，開工單時自動帶入）<input id="pPrice" type="number" min="0"></label>
+        <label>跟哪家廠商叫<select id="pSupplier"></select></label>
+        <label id="pStockWrap">現在有幾個（盤點數量）<input id="pStock" type="number" min="0"></label>
+      </div>
+      <label>備註<input id="pNote"></label>
+      <label class="check"><input type="checkbox" id="pActive"> 使用中（取消勾選＝停用，不再出現在叫貨建議）</label>
+      <div class="form-actions">
+        <button class="btn" onclick="savePart()">儲存</button>
+        <button class="btn-small btn-danger" id="pDelete" onclick="deletePart()">刪除這個零件</button>
+      </div>
+    </div>
+  </div>
+  <datalist id="catList"></datalist>
+  <datalist id="unitList"><option>瓶</option><option>顆</option><option>條</option><option>組</option><option>個</option><option>片</option></datalist>
+
+  <!-- 進貨／用掉／盤點 -->
+  <div class="modal" id="adjModal" hidden onclick="if (event.target === this) closeModals()">
+    <div class="modal-box">
+      <div class="modal-head">
+        <h2 id="adjTitle">進貨</h2>
+        <button class="btn-small" onclick="closeModals()">取消</button>
+      </div>
+      <p class="info" id="adjInfo"></p>
+      <label id="adjLabel">數量<input id="adjQty" type="number" min="0" onkeydown="if (event.key === 'Enter') saveAdjust()"></label>
+      <label>備註（可不填）<input id="adjNote" placeholder="例如：客人自己帶走、退回廠商"></label>
+      <div class="form-actions"><button class="btn" onclick="saveAdjust()">確定</button></div>
+    </div>
+  </div>
+
+  <!-- 新增／編輯廠商 -->
+  <div class="modal" id="supModal" hidden onclick="if (event.target === this) closeModals()">
+    <div class="modal-box">
+      <div class="modal-head">
+        <h2 id="supTitle">新增廠商</h2>
+        <button class="btn-small" onclick="closeModals()">取消</button>
+      </div>
+      <div class="form-grid">
+        <label>廠商名稱<input id="sName"></label>
+        <label>電話<input id="sPhone"></label>
+        <label>LINE ID（可不填）<input id="sLine"></label>
+      </div>
+      <label>備註<input id="sNote" placeholder="例如：每週二、五送貨"></label>
+      <div class="form-actions">
+        <button class="btn" onclick="saveSupplier()">儲存</button>
+        <button class="btn-small btn-danger" id="sDelete" onclick="deleteSupplier()">刪除這家廠商</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 叫貨訊息 -->
+  <div class="modal" id="orderMsgModal" hidden onclick="if (event.target === this) closeModals()">
+    <div class="modal-box">
+      <div class="modal-head">
+        <h2>傳給廠商</h2>
+        <button class="btn-small" onclick="closeModals()">關閉</button>
+      </div>
+      <p class="info" id="omTo"></p>
+      <label>叫貨訊息（可以直接修改）<textarea id="omText" rows="8"></textarea></label>
+      <div class="notify-actions">
+        <a class="btn btn-line" id="omLine" target="_blank" rel="noopener">用 LINE 傳</a>
+        <a class="btn" id="omTel">打電話</a>
+        <button class="btn-small" onclick="copyOrderMsg()">複製訊息</button>
+      </div>
+      <p class="info">叫貨單已經建好了。貨到時，在「叫貨中、還沒到」按「到貨入庫」。</p>
+    </div>
+  </div>
+
+  <script>
+    let parts = [], suppliers = [], orders = [];
+    let category = "";          // 目前選的分類
+    let editingPart = null, editingSupplier = null, adjusting = null, adjustMode = "in";
+
+    function el(tag, className, text) {
+      const e = document.createElement(tag);
+      if (className) e.className = className;
+      if (text !== undefined) e.textContent = text;
+      return e;
+    }
+    const $ = id => document.getElementById(id);
+    const isLow = p => p.active && p.safety_stock > 0 && p.stock <= p.safety_stock;
+    const partName = p => p ? [p.name, p.spec].filter(Boolean).join(" ") : "（已刪除的零件）";
+    // 建議叫多少：補到安全庫存的 2 倍
+    const suggestQty = p => Math.max(1, p.safety_stock * 2 - Math.max(0, p.stock));
+    const fmtTime = s => new Date(s).toLocaleString("zh-TW", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit", hour12: false });
+
+    function toast(message, type = "ok") {
+      let box = $("toastBox");
+      if (!box) { box = el("div"); box.id = "toastBox"; document.body.appendChild(box); }
+      const t = el("div", "toast " + type, message);
+      box.appendChild(t);
+      setTimeout(() => t.remove(), 4000);
+    }
+
+    // 還沒在 Supabase 執行「老闆版_庫存.sql」時，給清楚的提示
+    function showError(error) {
+      const missing = /parts|suppliers|stock_moves|purchase_orders|does not exist|schema cache/i.test(error.message);
+      $("msg").textContent = missing
+        ? "還沒啟用庫存：請先到 Supabase 的 SQL Editor 執行「老闆版_庫存.sql」。"
+        : "讀取失敗：" + error.message;
+    }
+
+    // ===== 讀資料 =====
+    async function loadAll() {
+      const [p, s, o] = await Promise.all([
+        db.from("parts").select("*, suppliers(name)").order("category").order("name").order("spec"),
+        db.from("suppliers").select("*").order("name"),
+        db.from("purchase_orders")
+          .select("*, suppliers(name, phone, line_id), purchase_order_items(qty, part_id, parts(name, spec, unit))")
+          .order("created_at", { ascending: false }).limit(60)
+      ]);
+      const err = p.error || s.error || o.error;
+      if (err) return showError(err);
+      parts = p.data; suppliers = s.data; orders = o.data;
+
+      const low = parts.filter(isLow).length;
+      $("kParts").textContent = parts.filter(x => x.active).length;
+      $("kLow").textContent = low;
+      $("tLow").textContent = low;
+      $("kPending").textContent = orders.filter(x => x.status === "已叫貨").length;
+      $("kSuppliers").textContent = suppliers.length;
+
+      renderCategories();
+      renderParts();
+      renderOrders();
+      renderSuppliers();
+      fillSelects();
+    }
+
+    // ===== 分頁 =====
+    function showTab(name) {
+      document.querySelectorAll("#invTabs button").forEach(b => b.classList.toggle("active", b.dataset.tab === name));
+      document.querySelectorAll(".tab-panel").forEach(p => p.hidden = p.id !== "panel-" + name);
+      if (name === "moves") loadMoves();
+      history.replaceState(null, "", "?tab=" + name);
+    }
+    $("invTabs").addEventListener("click", e => {
+      const b = e.target.closest("button");
+      if (b) showTab(b.dataset.tab);
+    });
+
+    // ===== 1. 庫存清單 =====
+    function renderCategories() {
+      const cats = [...new Set(parts.map(p => p.category))];
+      const box = $("catChips");
+      box.innerHTML = "";
+      ["", ...cats].forEach(c => {
+        const b = el("button", c === category ? "active" : "", c || "全部");
+        b.onclick = () => { category = c; renderCategories(); renderParts(); };
+        box.appendChild(b);
+      });
+      $("catList").innerHTML = "";
+      cats.forEach(c => $("catList").appendChild(el("option", "", c)));
+    }
+
+    function renderParts() {
+      const q = $("q").value.trim().toLowerCase();
+      const onlyLow = $("onlyLow").checked;
+      const showInactive = $("showInactive").checked;
+      const list = parts.filter(p =>
+        (showInactive || p.active) &&
+        (!category || p.category === category) &&
+        (!onlyLow || isLow(p)) &&
+        (!q || partName(p).toLowerCase().includes(q))
+      );
+      const ul = $("partList");
+      ul.innerHTML = "";
+      if (!list.length) {
+        ul.appendChild(el("li", "empty", parts.length ? "沒有符合的零件" : "還沒有零件，按右上角「＋ 新增零件」開始建立"));
+        return;
+      }
+      list.forEach(p => {
+        const li = el("li", p.active ? "" : "faded");
+        const main = el("div", "main");
+        main.append(el("div", "part-name", partName(p)));
+        const sub = [p.category, p.suppliers ? p.suppliers.name : "未指定廠商", p.price != null ? `售價 $${p.price.toLocaleString()}` : null,
+                     `安全庫存 ${p.safety_stock}`, p.active ? null : "已停用"].filter(Boolean).join("｜");
+        main.append(el("div", "sub", sub));
+
+        const cls = p.stock < 0 ? "neg" : isLow(p) ? "low" : "ok";
+        const stock = el("div", "stock " + cls);
+        stock.append(el("b", "", p.stock), el("small", "", p.unit));
+        stock.title = cls === "low" ? "要叫貨了" : cls === "neg" ? "數量是負的，請盤點" : "";
+
+        const btns = el("div", "row-btns");
+        [["＋進貨", "in"], ["－用掉", "out"], ["盤點", "count"]].forEach(([t, mode]) => {
+          const b = el("button", "btn-small" + (mode === "in" ? " btn-in" : ""), t);
+          b.onclick = () => openAdjust(p, mode);
+          btns.appendChild(b);
+        });
+        const edit = el("button", "btn-small btn-plain", "編輯");
+        edit.onclick = () => openPart(p);
+        const hist = el("button", "btn-small btn-plain", "紀錄");
+        hist.onclick = () => { $("movePart").value = p.id; showTab("moves"); };
+        btns.append(edit, hist);
+
+        li.append(main, stock, btns);
+        ul.appendChild(li);
+      });
+    }
+
+    // ----- 新增／編輯零件 -----
+    function fillSelects() {
+      const sel = $("pSupplier");
+      sel.innerHTML = "";
+      sel.appendChild(el("option", "", "（還沒指定）")).value = "";
+      suppliers.forEach(s => { const o = el("option", "", s.name); o.value = s.id; sel.appendChild(o); });
+
+      const mp = $("movePart");
+      const keep = mp.value;
+      mp.innerHTML = "";
+      mp.appendChild(el("option", "", "全部零件")).value = "";
+      parts.forEach(p => { const o = el("option", "", partName(p)); o.value = p.id; mp.appendChild(o); });
+      mp.value = keep;
+    }
+
+    function openPart(p = null) {
+      editingPart = p;
+      $("partTitle").textContent = p ? "編輯零件" : "新增零件";
+      $("pName").value = p ? p.name : "";
+      $("pSpec").value = p ? p.spec || "" : "";
+      $("pCategory").value = p ? p.category : (category || "");
+      $("pUnit").value = p ? p.unit : "個";
+      $("pSafety").value = p ? p.safety_stock : 2;
+      $("pPrice").value = p && p.price != null ? p.price : "";
+      $("pSupplier").value = p && p.supplier_id ? p.supplier_id : "";
+      $("pNote").value = p ? p.note || "" : "";
+      $("pActive").checked = p ? p.active : true;
+      $("pStock").value = "";
+      $("pStockWrap").hidden = !!p;       // 數量只在新增時填；之後用「進貨／用掉／盤點」改
+      $("pDelete").hidden = !p;
+      $("partModal").hidden = false;
+      $("pName").focus();
+    }
+
+    async function savePart() {
+      const name = $("pName").value.trim();
+      if (!name) return alert("請填品名");
+      const row = {
+        name,
+        spec: $("pSpec").value.trim() || null,
+        category: $("pCategory").value.trim() || "其他",
+        unit: $("pUnit").value.trim() || "個",
+        safety_stock: Math.max(0, Number($("pSafety").value) || 0),
+        price: $("pPrice").value === "" ? null : Math.max(0, Number($("pPrice").value)),
+        supplier_id: $("pSupplier").value ? Number($("pSupplier").value) : null,
+        note: $("pNote").value.trim() || null,
+        active: $("pActive").checked
+      };
+      if (editingPart) {
+        const { error } = await db.from("parts").update(row).eq("id", editingPart.id);
+        if (error) return alert(friendly(error));
+        toast(`已更新「${partName(row)}」`);
+      } else {
+        const { data, error } = await db.from("parts").insert(row).select("id").single();
+        if (error) return alert(friendly(error));
+        // 一開始有幾個：記成一筆「期初」，庫存數量由它算出來
+        const start = Number($("pStock").value) || 0;
+        if (start > 0) await db.from("stock_moves").insert({ part_id: data.id, change: start, reason: "期初", note: "新增零件時盤點" });
+        toast(`已新增「${partName(row)}」`);
+      }
+      closeModals();
+      loadAll();
+    }
+
+    async function deletePart() {
+      const p = editingPart;
+      if (!confirm(`確定要刪除「${partName(p)}」嗎？\n\n它的進出紀錄也會一起刪掉。只是不再進貨的話，建議取消「使用中」停用就好。\n刪錯了可以到「匯入／備份」的垃圾桶救回零件。`)) return;
+      const { error } = await db.from("parts").delete().eq("id", p.id);
+      if (error) return alert(friendly(error));
+      toast(`已刪除「${partName(p)}」`);
+      closeModals();
+      loadAll();
+    }
+
+    function friendly(error) {
+      if (/parts_name_spec_key|duplicate/.test(error.message)) return "已經有一樣品名、規格的零件了";
+      return "儲存失敗：" + error.message;
+    }
+
+    // ----- 進貨／用掉／盤點 -----
+    function openAdjust(p, mode) {
+      adjusting = p;
+      adjustMode = mode;
+      $("adjTitle").textContent = { in: "進貨", out: "用掉／拿出去", count: "盤點" }[mode];
+      $("adjInfo").textContent = `${partName(p)}　現在 ${p.stock} ${p.unit}`;
+      $("adjLabel").firstChild.textContent = mode === "count" ? `實際數到幾${p.unit}` : `數量（${p.unit}）`;
+      $("adjQty").value = mode === "count" ? p.stock : "";
+      $("adjNote").value = "";
+      $("adjModal").hidden = false;
+      $("adjQty").focus();
+      $("adjQty").select();
+    }
+
+    async function saveAdjust() {
+      const p = adjusting;
+      const n = Number($("adjQty").value);
+      if (!Number.isInteger(n) || n < 0 || (adjustMode !== "count" && n === 0)) return alert("請填正確的數量（整數）");
+      let change, reason;
+      if (adjustMode === "in") { change = n; reason = "進貨"; }
+      else if (adjustMode === "out") {
+        if (n > p.stock && !confirm(`庫存只有 ${p.stock} ${p.unit}，確定要拿出 ${n} ${p.unit}嗎？`)) return;
+        change = -n; reason = "其他";
+      } else {
+        change = n - p.stock; reason = "盤點調整";
+        if (change === 0) { closeModals(); return toast("數量一樣，不用調整"); }
+      }
+      const { error } = await db.from("stock_moves").insert({ part_id: p.id, change, reason, note: $("adjNote").value.trim() || null });
+      if (error) return alert("儲存失敗：" + error.message);
+      toast(`${partName(p)}：${change > 0 ? "+" : ""}${change}，現在 ${p.stock + change} ${p.unit}`);
+      closeModals();
+      loadAll();
+    }
+
+    // ===== 2. 叫貨 =====
+    function renderOrders() {
+      // 已經叫了還沒到的零件，提醒不要重複叫
+      const pending = {};
+      orders.filter(o => o.status === "已叫貨").forEach(o =>
+        o.purchase_order_items.forEach(i => pending[i.part_id] = (pending[i.part_id] || 0) + i.qty));
+
+      // 建議叫貨：依廠商分組
+      const box = $("suggest");
+      box.innerHTML = "";
+      const low = parts.filter(isLow);
+      if (!low.length) box.appendChild(el("p", "empty", "目前沒有要叫貨的零件 👍"));
+      const groups = new Map();
+      low.forEach(p => {
+        const k = p.supplier_id || 0;
+        if (!groups.has(k)) groups.set(k, []);
+        groups.get(k).push(p);
+      });
+      groups.forEach((items, sid) => box.appendChild(supplierGroup(sid, items, pending)));
+
+      // 叫貨中
+      const pl = $("pendingList");
+      pl.innerHTML = "";
+      const pend = orders.filter(o => o.status === "已叫貨");
+      if (!pend.length) pl.appendChild(el("li", "empty", "沒有叫貨中的單"));
+      pend.forEach(o => pl.appendChild(orderItem(o, true)));
+
+      const dl = $("doneList");
+      dl.innerHTML = "";
+      const done = orders.filter(o => o.status !== "已叫貨").slice(0, 10);
+      if (!done.length) dl.appendChild(el("li", "empty", "還沒有紀錄"));
+      done.forEach(o => dl.appendChild(orderItem(o, false)));
+    }
+
+    // 一家廠商的建議叫貨清單
+    function supplierGroup(sid, items, pending) {
+      const s = suppliers.find(x => x.id === sid);
+      const card = el("div", "sup-group");
+      const head = el("div", "sup-head");
+      head.append(el("b", "", s ? s.name : "未指定廠商"));
+      if (s && s.phone) head.append(el("span", "sub", s.phone));
+      card.appendChild(head);
+
+      const rows = el("div", "sug-rows");
+      const addRow = (p, checked) => {
+        const r = el("label", "sug-row");
+        const cb = el("input"); cb.type = "checkbox"; cb.checked = checked; cb.dataset.part = p.id;
+        const qty = el("input", "qty"); qty.type = "number"; qty.min = 1; qty.value = suggestQty(p);
+        const info = el("span", "sug-name", partName(p));
+        const now = el("small", isLow(p) ? "low-text" : "", `現在 ${p.stock}／安全 ${p.safety_stock}` + (pending[p.id] ? `｜已叫 ${pending[p.id]} 還沒到` : ""));
+        r.append(cb, info, now, qty, el("span", "unit", p.unit));
+        rows.appendChild(r);
+      };
+      items.forEach(p => addRow(p, !pending[p.id]));
+      card.appendChild(rows);
+
+      // 同一家廠商的其他零件，也可以順便叫
+      const others = parts.filter(p => p.active && (p.supplier_id || 0) === sid && !items.includes(p));
+      const foot = el("div", "sup-foot");
+      if (others.length) {
+        const sel = el("select");
+        sel.appendChild(el("option", "", "＋ 順便叫其他零件…")).value = "";
+        others.forEach(p => { const o = el("option", "", `${partName(p)}（現在 ${p.stock}）`); o.value = p.id; sel.appendChild(o); });
+        sel.onchange = () => {
+          const p = parts.find(x => x.id === Number(sel.value));
+          if (p) { addRow(p, true); sel.querySelector(`option[value="${p.id}"]`).remove(); }
+          sel.value = "";
+        };
+        foot.appendChild(sel);
+      }
+      const btn = el("button", "btn", "建立叫貨單");
+      btn.onclick = () => createOrder(sid, rows, btn);
+      foot.appendChild(btn);
+      card.appendChild(foot);
+      return card;
+    }
+
+    async function createOrder(sid, rows, btn) {
+      const lines = [...rows.querySelectorAll(".sug-row")]
+        .filter(r => r.querySelector("input[type=checkbox]").checked)
+        .map(r => ({ part_id: Number(r.querySelector("input[type=checkbox]").dataset.part), qty: Number(r.querySelector(".qty").value) }));
+      if (!lines.length) return alert("請至少勾一樣要叫的零件");
+      if (lines.some(l => !Number.isInteger(l.qty) || l.qty <= 0)) return alert("數量要是大於 0 的整數");
+
+      btn.disabled = true;
+      const { data: order, error } = await db.from("purchase_orders").insert({ supplier_id: sid || null, status: "已叫貨" }).select("id").single();
+      if (error) { btn.disabled = false; return alert("建立失敗：" + error.message); }
+      const { error: e2 } = await db.from("purchase_order_items").insert(lines.map(l => ({ ...l, order_id: order.id })));
+      if (e2) { btn.disabled = false; return alert("建立失敗：" + e2.message); }
+
+      await loadAll();
+      const o = orders.find(x => x.id === order.id);
+      if (o) openOrderMsg(o);
+    }
+
+    function orderItem(o, isPending) {
+      const li = el("li");
+      const main = el("div", "main");
+      const s = o.suppliers;
+      main.append(el("div", "", `#${o.id}　${s ? s.name : "未指定廠商"}`));
+      main.append(el("div", "order-items", o.purchase_order_items.map(i => `${partName(i.parts)} ×${i.qty}${i.parts ? i.parts.unit : ""}`).join("、")));
+      const when = o.status === "已到貨" ? `${fmtTime(o.received_at)} 到貨` : o.status === "取消" ? "已取消" : `${fmtTime(o.created_at)} 叫貨`;
+      main.append(el("div", "sub", when));
+      li.append(el("span", "badge " + (o.status === "已叫貨" ? "doing" : o.status === "已到貨" ? "done" : "todo"), o.status), main);
+      if (isPending) {
+        const recv = el("button", "btn-small btn-in", "到貨入庫");
+        recv.onclick = () => receiveOrder(o, recv);
+        const msg = el("button", "btn-small btn-plain", "再傳一次");
+        msg.onclick = () => openOrderMsg(o);
+        const cancel = el("button", "btn-small btn-danger", "取消");
+        cancel.onclick = () => cancelOrder(o);
+        li.append(recv, msg, cancel);
+      }
+      return li;
+    }
+
+    async function receiveOrder(o, btn) {
+      const list = o.purchase_order_items.map(i => `${partName(i.parts)} ×${i.qty}`).join("\n");
+      if (!confirm(`確定貨都到了嗎？\n\n${list}\n\n這些數量會加進庫存。只到一部分的話，請先按取消，到時用零件的「＋進貨」一樣一樣加。`)) return;
+      btn.disabled = true;
+      const { error } = await db.rpc("receive_order", { p_order_id: o.id });
+      if (error) { btn.disabled = false; return alert("入庫失敗：" + error.message); }
+      toast(`叫貨單 #${o.id} 已入庫`);
+      loadAll();
+    }
+
+    async function cancelOrder(o) {
+      if (!confirm(`確定要取消叫貨單 #${o.id} 嗎？（庫存不會改變）`)) return;
+      const { error } = await db.from("purchase_orders").update({ status: "取消" }).eq("id", o.id);
+      if (error) return alert("取消失敗：" + error.message);
+      loadAll();
+    }
+
+    // ----- 叫貨訊息 -----
+    function openOrderMsg(o) {
+      const s = o.suppliers;
+      const lines = o.purchase_order_items.map(i => `・${partName(i.parts)} ×${i.qty} ${i.parts ? i.parts.unit : ""}`);
+      $("omText").value = `【竹北榮詮機車行】${s ? s.name + " 您好" : "您好"}，我要叫貨：\n${lines.join("\n")}\n\n麻煩您了，謝謝！`;
+      $("omTo").textContent = s ? `傳給：${s.name}${s.phone ? "　" + s.phone : ""}${s.line_id ? "　LINE：" + s.line_id : ""}` : "這張單沒有指定廠商，請複製訊息自己傳。";
+      $("omTel").hidden = !(s && s.phone);
+      if (s && s.phone) $("omTel").href = "tel:" + s.phone.replace(/[^\d+]/g, "");
+      const update = () => $("omLine").href = "https://line.me/R/share?text=" + encodeURIComponent($("omText").value);
+      $("omText").oninput = update;
+      update();
+      $("orderMsgModal").hidden = false;
+    }
+
+    async function copyOrderMsg() {
+      try {
+        await navigator.clipboard.writeText($("omText").value);
+        toast("訊息已複製");
+      } catch {
+        alert("複製失敗，請直接選取文字複製");
+      }
+    }
+
+    // ===== 3. 廠商 =====
+    function renderSuppliers() {
+      const ul = $("supplierList");
+      ul.innerHTML = "";
+      if (!suppliers.length) ul.appendChild(el("li", "empty", "還沒有廠商，按「＋ 新增廠商」開始建立"));
+      suppliers.forEach(s => {
+        const li = el("li");
+        const main = el("div", "main");
+        main.append(el("div", "part-name", s.name));
+        const n = parts.filter(p => p.supplier_id === s.id).length;
+        main.append(el("div", "sub", [s.phone, s.line_id ? "LINE：" + s.line_id : null, `${n} 種零件`, s.note].filter(Boolean).join("｜")));
+        li.appendChild(main);
+        if (s.phone) {
+          const a = el("a", "btn-small btn-plain", "打電話");
+          a.href = "tel:" + s.phone.replace(/[^\d+]/g, "");
+          li.appendChild(a);
+        }
+        const edit = el("button", "btn-small btn-plain", "編輯");
+        edit.onclick = () => openSupplier(s);
+        li.appendChild(edit);
+        ul.appendChild(li);
+      });
+    }
+
+    function openSupplier(s = null) {
+      editingSupplier = s;
+      $("supTitle").textContent = s ? "編輯廠商" : "新增廠商";
+      $("sName").value = s ? s.name : "";
+      $("sPhone").value = s ? s.phone || "" : "";
+      $("sLine").value = s ? s.line_id || "" : "";
+      $("sNote").value = s ? s.note || "" : "";
+      $("sDelete").hidden = !s;
+      $("supModal").hidden = false;
+      $("sName").focus();
+    }
+
+    async function saveSupplier() {
+      const row = {
+        name: $("sName").value.trim(),
+        phone: $("sPhone").value.trim() || null,
+        line_id: $("sLine").value.trim() || null,
+        note: $("sNote").value.trim() || null
+      };
+      if (!row.name) return alert("請填廠商名稱");
+      const { error } = editingSupplier
+        ? await db.from("suppliers").update(row).eq("id", editingSupplier.id)
+        : await db.from("suppliers").insert(row);
+      if (error) return alert("儲存失敗：" + error.message);
+      toast(`已儲存「${row.name}」`);
+      closeModals();
+      loadAll();
+    }
+
+    async function deleteSupplier() {
+      const s = editingSupplier;
+      const n = parts.filter(p => p.supplier_id === s.id).length;
+      if (!confirm(`確定要刪除「${s.name}」嗎？` + (n ? `\n\n它的 ${n} 種零件不會刪掉，只會變成「未指定廠商」。` : ""))) return;
+      const { error } = await db.from("suppliers").delete().eq("id", s.id);
+      if (error) return alert("刪除失敗：" + error.message);
+      closeModals();
+      loadAll();
+    }
+
+    // ===== 4. 進出紀錄 =====
+    async function loadMoves() {
+      const ul = $("moveList");
+      ul.innerHTML = "";
+      ul.appendChild(el("li", "empty", "讀取中…"));
+      let q = db.from("stock_moves")
+        .select("*, parts(name, spec, unit), service_records(date, bikes(plate))")
+        .order("created_at", { ascending: false }).order("id", { ascending: false }).limit(200);
+      if ($("movePart").value) q = q.eq("part_id", Number($("movePart").value));
+      if ($("moveReason").value) q = q.eq("reason", $("moveReason").value);
+      const { data, error } = await q;
+      ul.innerHTML = "";
+      if (error) return showError(error);
+      if (!data.length) return ul.appendChild(el("li", "empty", "沒有紀錄"));
+      data.forEach(m => {
+        const li = el("li");
+        const main = el("div", "main");
+        main.append(el("div", "", partName(m.parts)));
+        const plate = m.service_records && m.service_records.bikes ? `工單：${m.service_records.bikes.plate}（${m.service_records.date}）` : null;
+        main.append(el("div", "sub", [fmtTime(m.created_at), m.reason, plate, m.note].filter(Boolean).join("｜")));
+        const c = el("div", "move-change " + (m.change > 0 ? "plus" : "minus"), (m.change > 0 ? "+" : "") + m.change);
+        li.append(main, c);
+        if (m.record_id) {
+          li.classList.add("clickable-row");
+          li.title = "打開這張工單的車";
+          li.onclick = () => location.href = "app.html?plate=" + encodeURIComponent(m.service_records.bikes.plate);
+        }
+        ul.appendChild(li);
+      });
+    }
+
+    function closeModals() {
+      ["partModal", "adjModal", "supModal", "orderMsgModal"].forEach(id => $(id).hidden = true);
+    }
+    document.addEventListener("keydown", e => { if (e.key === "Escape") closeModals(); });
+
+    async function checkLogin() {
+      const { data } = await db.auth.getSession();
+      if (!data.session) {
+        location.href = "index.html";
+        return;
+      }
+      await loadAll();
+      const tab = new URLSearchParams(location.search).get("tab");
+      if (tab && $("panel-" + tab)) showTab(tab);
+    }
+    checkLogin();
+  </script>
+</body>
+</html>

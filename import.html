@@ -24,6 +24,7 @@
       <button class="btn-ghost" onclick="location.href='app.html'">主畫面</button>
       <button class="btn-ghost" onclick="location.href='customers.html'">客戶查詢</button>
       <button class="btn-ghost" onclick="location.href='bikes.html'">車輛總覽</button>
+      <button class="btn-ghost" onclick="location.href='inventory.html'">庫存</button>
       <button class="btn-ghost" onclick="location.href='analytics.html'">數據分析</button>
       <button class="btn-ghost" onclick="location.href='import.html'">匯入／備份</button>
     </div>
@@ -332,7 +333,13 @@
       { table: "bikes", sheet: "車輛" },
       { table: "service_records", sheet: "工單" },
       { table: "appointments", sheet: "預約" },
-      { table: "notes", sheet: "便條" }
+      { table: "notes", sheet: "便條" },
+      // 庫存（還沒啟用庫存的話會自動跳過）
+      { table: "suppliers", sheet: "廠商", optional: true },
+      { table: "parts", sheet: "零件", optional: true },
+      { table: "purchase_orders", sheet: "叫貨單", optional: true },
+      { table: "purchase_order_items", sheet: "叫貨明細", optional: true },
+      { table: "stock_moves", sheet: "庫存進出", optional: true }
     ];
 
     // Supabase 一次最多給 1000 筆，這裡一頁一頁拿，直到拿完
@@ -365,6 +372,7 @@
         for (const t of BACKUP_TABLES) {
           info.textContent = `備份中：${t.sheet}...`;
           const { data, error } = await fetchAllRows(t.table);
+          if (error && t.optional) continue;
           if (error) {
             alert(`備份「${t.sheet}」失敗：` + error.message);
             info.textContent = "備份失敗，請再試一次";
@@ -418,17 +426,19 @@
 
     showBackupInfo();
     // ===== 垃圾桶、操作紀錄 =====
-    const TABLE_LABEL = { customers: "客戶", bikes: "車輛", service_records: "工單", appointments: "預約" };
+    const TABLE_LABEL = { customers: "客戶", bikes: "車輛", service_records: "工單", appointments: "預約", parts: "零件", suppliers: "廠商" };
     const ACTION_LABEL = { INSERT: "新增", UPDATE: "修改", DELETE: "刪除", RESTORE: "救回" };
     const ACTION_CLASS = { INSERT: "done", UPDATE: "doing", DELETE: "todo", RESTORE: "done" };
     const FIELD_LABEL = {
       name: "姓名", phone: "電話", note: "備註", plate: "車牌", model: "車型", year: "年份", mileage: "里程",
       customer_id: "車主", bike_id: "車輛", date: "日期", items: "項目", parts: "零件", total: "金額",
-      status: "狀態", next_service_km: "下次保養里程", completed_at: "完成時間", time: "時間", source: "來源", notified_at: "通知時間"
+      status: "狀態", next_service_km: "下次保養里程", completed_at: "完成時間", time: "時間", source: "來源", notified_at: "通知時間",
+      spec: "規格", category: "分類", unit: "單位", stock: "庫存", safety_stock: "安全庫存", price: "售價",
+      supplier_id: "廠商", active: "使用中", line_id: "LINE ID"
     };
     const SKIP_FIELDS = new Set(["id", "created_at", "phone_digits"]);
     // 一起刪掉的資料，救回時要照這個順序：先客戶、再車、最後工單和預約
-    const RESTORE_ORDER = ["customers", "bikes", "service_records", "appointments"];
+    const RESTORE_ORDER = ["customers", "bikes", "service_records", "appointments", "suppliers", "parts"];
     const plateById = new Map(); // 車輛 id → 車牌
 
     function fmtTime(s) {
@@ -465,6 +475,8 @@
         case "bikes": return `${d.plate}　${d.model || "未填車型"}`;
         case "service_records": return `${plateById.get(d.bike_id) || "（車輛已刪除）"}　${d.date || "日期不明"}　${d.items || ""}`;
         case "appointments": return [d.date, (d.time || "").slice(0, 5), d.plate, d.name].filter(Boolean).join("　");
+        case "parts": return [d.name, d.spec].filter(Boolean).join(" ");
+        case "suppliers": return d.name || "";
         default: return "";
       }
     }
@@ -534,7 +546,7 @@
         // 連同一起刪掉的有幾筆
         const others = {};
         items.slice(1).forEach(l => others[l.table_name] = (others[l.table_name] || 0) + 1);
-        const unit = { bikes: "台車", service_records: "張工單", appointments: "筆預約", customers: "位客戶" };
+        const unit = { bikes: "台車", service_records: "張工單", appointments: "筆預約", customers: "位客戶", parts: "種零件", suppliers: "家廠商" };
         const extra = Object.entries(others).map(([t, n]) => `${n} ${unit[t]}`).join("、");
         main.append(el("div", "sub", `${fmtTime(top.at)} 刪除・${top.device || "不明裝置"}` + (extra ? `・連同 ${extra}` : "")));
 

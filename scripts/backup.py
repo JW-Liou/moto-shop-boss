@@ -30,7 +30,14 @@ TABLES = [
     ("service_records", "工單"),
     ("appointments", "預約"),
     ("notes", "便條"),
+    # 庫存（還沒啟用庫存的話會自動跳過）
+    ("suppliers", "廠商"),
+    ("parts", "零件"),
+    ("purchase_orders", "叫貨單"),
+    ("purchase_order_items", "叫貨明細"),
+    ("stock_moves", "庫存進出"),
 ]
+OPTIONAL = {"suppliers", "parts", "purchase_orders", "purchase_order_items", "stock_moves"}
 PAGE = 1000
 TAIPEI = datetime.timezone(datetime.timedelta(hours=8))
 
@@ -43,6 +50,10 @@ def read_config():
     return url, key
 
 
+class HttpError(Exception):
+    pass
+
+
 def request(url, headers, body=None):
     data = json.dumps(body).encode() if body is not None else None
     req = urllib.request.Request(url, data=data, headers=headers, method="POST" if body is not None else "GET")
@@ -50,13 +61,16 @@ def request(url, headers, body=None):
         with urllib.request.urlopen(req, timeout=60) as res:
             return json.loads(res.read().decode("utf-8"))
     except urllib.error.HTTPError as e:
-        raise SystemExit(f"連線失敗（{e.code}）：{e.read().decode('utf-8', 'replace')[:300]}")
+        raise HttpError(f"連線失敗（{e.code}）：{e.read().decode('utf-8', 'replace')[:300]}")
 
 
 def login(url, key, email, password):
-    res = request(f"{url}/auth/v1/token?grant_type=password",
-                  {"apikey": key, "Content-Type": "application/json"},
-                  {"email": email, "password": password})
+    try:
+        res = request(f"{url}/auth/v1/token?grant_type=password",
+                      {"apikey": key, "Content-Type": "application/json"},
+                      {"email": email, "password": password})
+    except HttpError as e:
+        raise SystemExit(f"登入失敗：{e}")
     return res["access_token"]
 
 
@@ -96,7 +110,13 @@ def main():
 
     total = 0
     for table, sheet in TABLES:
-        rows = fetch_all(url, key, token, table)
+        try:
+            rows = fetch_all(url, key, token, table)
+        except HttpError as e:
+            if table in OPTIONAL:
+                print(f"{sheet}：還沒啟用，跳過")
+                continue
+            raise SystemExit(f"讀取「{sheet}」失敗：{e}")
         total += len(rows)
         ws = book.create_sheet(sheet)
         columns = list(rows[0].keys()) if rows else ["（沒有資料）"]
