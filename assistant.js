@@ -130,7 +130,14 @@
       const { data, error } = await db.functions.invoke("assistant", { body: { messages: history } });
       if (error) {
         let msg = error.message;
-        try { msg = (await error.context.json()).error || msg; } catch (e) { /* 不是 JSON */ }
+        const status = error.context && error.context.status;
+        try {
+          msg = (await error.context.json()).error || msg;
+        } catch (e) {
+          // 不是小助理自己回的錯誤（例如 Supabase 判定執行太久被停掉）
+          if (status === 546 || status === 504) msg = "小助理等 Google 回應等太久了，請過一下再問一次。";
+          else if (status) msg = `小助理暫時無法使用（${status}），請過一下再試。`;
+        }
         throw new Error(msg);
       }
       reply = data.reply;

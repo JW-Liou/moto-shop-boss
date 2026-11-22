@@ -160,30 +160,46 @@ async function runTool(name: string, args: unknown, auth: string, apikey: string
 //   - 模型不存在（404）→ 換下一個
 //   - Google 忙線（500、503…）→ 等一下再試一次，還是不行就換下一個模型
 //   - 免費額度用完（429）→ 換下一個模型（每個模型的額度是分開算的）
+//   - Google 太久沒回（超過 25 秒）→ 當作忙線，換下一個模型
 // 找到能用的模型就記住，下次先用它
 let workingModel = "";
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
-async function callGemini(contents: unknown[], key: string) {
+const GEMINI_TIMEOUT = 25_000;   // 每次問 Google 最多等 25 秒
+const TOTAL_LIMIT = 100_000;     // 整個問題最多花 100 秒（Supabase 上限是 150 秒）
+async function callGemini(contents: unknown[], key: string, startedAt: number) {
   const chosen = Deno.env.get("GEMINI_MODEL");
   const list = chosen ? [chosen, ...MODEL_CANDIDATES] : workingModel ? [workingModel, ...MODEL_CANDIDATES] : MODEL_CANDIDATES;
   const models = [...new Set(list)];
   let busy = false, quota = false, missing = 0;
   for (const model of models) {
     for (let attempt = 0; attempt < 2; attempt++) {
-      const res = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
-        {
-          method: "POST",
-          headers: { "x-goog-api-key": key, "Content-Type": "application/json" },
-          body: JSON.stringify({
-            systemInstruction: { parts: [{ text: systemPrompt() }] },
-            contents,
-            tools: [{ functionDeclarations: TOOLS }],
-            generationConfig: { temperature: 0.3 },
-          }),
-        },
-      );
+      const left = TOTAL_LIMIT - (Date.now() - startedAt);
+      if (left < 5_000) throw new Error("Google 的 AI 回得太慢了，請過一兩分鐘再問一次。");
+      const t0 = Date.now();
+      let res: Response;
+      try {
+        res = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
+          {
+            method: "POST",
+            headers: { "x-goog-api-key": key, "Content-Type": "application/json" },
+            body: JSON.stringify({
+              systemInstruction: { parts: [{ text: systemPrompt() }] },
+              contents,
+              tools: [{ functionDeclarations: TOOLS }],
+              generationConfig: { temperature: 0.3 },
+            }),
+            signal: AbortSignal.timeout(Math.min(GEMINI_TIMEOUT, left)),
+          },
+        );
+      } catch (e) {
+        // 等太久被中斷，或連不上 Google：當作忙線，換下一個模型
+        console.error(`Gemini ${model} 沒有回應（${Date.now() - t0} 毫秒）：${e instanceof Error ? e.name : e}`);
+        busy = true;
+        break;
+      }
       if (res.ok) {
+        console.log(`Gemini ${model} 成功（${Date.now() - t0} 毫秒）`);
         workingModel = model;
         return await res.json();
       }
@@ -210,6 +226,7 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
   if (req.method !== "POST") return json({ error: "只接受 POST" }, 405);
 
+  const startedAt = Date.now();
   try {
     // 1. 確認是員工
     const auth = req.headers.get("Authorization") ?? "";
@@ -250,7 +267,7 @@ Deno.serve(async (req) => {
     const proposals: unknown[] = [];
     const used: string[] = [];
     for (let round = 0; round < MAX_ROUNDS; round++) {
-      const data = await callGemini(contents, key);
+      const data = await callGemini(contents, key, startedAt);
       const content = data?.candidates?.[0]?.content;
       const parts: any[] = content?.parts ?? [];
       const calls = parts.filter((p) => p.functionCall);
