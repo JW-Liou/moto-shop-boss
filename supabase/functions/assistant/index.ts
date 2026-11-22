@@ -156,41 +156,54 @@ async function runTool(name: string, args: unknown, auth: string, apikey: string
   return body;
 }
 
-// 呼叫 Gemini；模型不存在就換下一個，找到能用的就記住
+// 呼叫 Gemini
+//   - 模型不存在（404）→ 換下一個
+//   - Google 忙線（500、503…）→ 等一下再試一次，還是不行就換下一個模型
+//   - 免費額度用完（429）→ 換下一個模型（每個模型的額度是分開算的）
+// 找到能用的模型就記住，下次先用它
 let workingModel = "";
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 async function callGemini(contents: unknown[], key: string) {
   const chosen = Deno.env.get("GEMINI_MODEL");
-  const models = chosen ? [chosen] : workingModel ? [workingModel, ...MODEL_CANDIDATES] : MODEL_CANDIDATES;
-  let lastError = "";
+  const list = chosen ? [chosen, ...MODEL_CANDIDATES] : workingModel ? [workingModel, ...MODEL_CANDIDATES] : MODEL_CANDIDATES;
+  const models = [...new Set(list)];
+  let busy = false, quota = false, missing = 0;
   for (const model of models) {
-    const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
-      {
-        method: "POST",
-        headers: { "x-goog-api-key": key, "Content-Type": "application/json" },
-        body: JSON.stringify({
-          systemInstruction: { parts: [{ text: systemPrompt() }] },
-          contents,
-          tools: [{ functionDeclarations: TOOLS }],
-          generationConfig: { temperature: 0.3 },
-        }),
-      },
-    );
-    if (res.ok) {
-      workingModel = model;
-      return await res.json();
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const res = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
+        {
+          method: "POST",
+          headers: { "x-goog-api-key": key, "Content-Type": "application/json" },
+          body: JSON.stringify({
+            systemInstruction: { parts: [{ text: systemPrompt() }] },
+            contents,
+            tools: [{ functionDeclarations: TOOLS }],
+            generationConfig: { temperature: 0.3 },
+          }),
+        },
+      );
+      if (res.ok) {
+        workingModel = model;
+        return await res.json();
+      }
+      const text = await res.text();
+      console.error(`Gemini ${model} 回應 ${res.status}：${text.slice(0, 300)}`);
+      if (res.status === 404) { missing++; break; }
+      if (res.status === 429) { quota = true; break; }
+      if (res.status >= 500) {
+        busy = true;
+        if (attempt === 0) { await sleep(1500); continue; }
+        break;
+      }
+      if (/API key/i.test(text)) throw new Error("AI 金鑰不正確，請到 Supabase 重新設定 GEMINI_API_KEY。");
+      if (res.status === 403) throw new Error("AI 金鑰沒有權限，請確認 GEMINI_API_KEY 是在 Google AI Studio 申請的。");
+      throw new Error(`AI 服務發生錯誤（${res.status}）`);
     }
-    const text = await res.text();
-    if (res.status === 404) {
-      lastError = `找不到模型 ${model}`;
-      continue;
-    }
-    if (res.status === 429) throw new Error("AI 的免費額度暫時用完了（每分鐘或每天有上限），請等一下再問。");
-    if (res.status === 400 && /API key/i.test(text)) throw new Error("AI 金鑰不正確，請到 Supabase 重新設定 GEMINI_API_KEY。");
-    if (res.status === 403) throw new Error("AI 金鑰沒有權限，請確認 GEMINI_API_KEY 是在 Google AI Studio 申請的。");
-    throw new Error(`AI 服務發生錯誤（${res.status}）`);
   }
-  throw new Error(`AI 模型都無法使用：${lastError}。請到 Supabase 設定 GEMINI_MODEL。`);
+  if (busy) throw new Error("Google 的 AI 現在太多人在用（忙線中），請過一兩分鐘再問一次。");
+  if (quota) throw new Error("AI 的免費額度暫時用完了（每分鐘或每天有上限），請等一下再問。");
+  throw new Error(`AI 模型都無法使用（找不到 ${missing} 個模型），請到 Supabase 設定 GEMINI_MODEL。`);
 }
 
 Deno.serve(async (req) => {
