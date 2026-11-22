@@ -36,8 +36,13 @@ TABLES = [
     ("purchase_orders", "叫貨單"),
     ("purchase_order_items", "叫貨明細"),
     ("stock_moves", "庫存進出"),
+    # 線上預約時段（還沒啟用的話會自動跳過）
+    ("booking_settings", "預約設定"),
+    ("booking_slots", "預約時段"),
+    ("booking_blocks", "關閉的時段"),
 ]
-OPTIONAL = {"suppliers", "parts", "purchase_orders", "purchase_order_items", "stock_moves"}
+OPTIONAL = {"suppliers", "parts", "purchase_orders", "purchase_order_items", "stock_moves",
+            "booking_settings", "booking_slots", "booking_blocks"}
 PAGE = 1000
 TAIPEI = datetime.timezone(datetime.timedelta(hours=8))
 

@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>線上預約設定 - 竹北榮詮管理系統</title>
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#0b1120">
+  <link rel="icon" href="icon-192.png">
+  <link rel="apple-touch-icon" href="icon-180.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&display=swap">
+  <link rel="stylesheet" href="style.css">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="config.js"></script>
+  <script src="ui.js" defer></script>
+  <script src="assistant.js" defer></script>
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="app.html">竹北榮詮<span>管理系統</span></a>
+    <div class="user">
+      <button class="btn-ghost" onclick="location.href='app.html'">主畫面</button>
+      <button class="btn-ghost" onclick="location.href='customers.html'">客戶查詢</button>
+      <button class="btn-ghost" onclick="location.href='bikes.html'">車輛總覽</button>
+      <button class="btn-ghost" onclick="location.href='inventory.html'">庫存</button>
+      <button class="btn-ghost" onclick="location.href='booking.html'">線上預約</button>
+      <button class="btn-ghost" onclick="location.href='analytics.html'">數據分析</button>
+      <button class="btn-ghost" onclick="location.href='import.html'">匯入／備份</button>
+    </div>
+  </header>
+
+  <main class="container wide">
+    <p class="msg" id="msg"></p>
+
+    <!-- 1. 未來的時段：點一下就能關掉或打開 -->
+    <section class="card">
+      <div class="card-head">
+        <h2>接下來的時段</h2>
+        <span class="info" id="calInfo"></span>
+      </div>
+      <p class="info">點時段可以「關掉／打開」那個時段；不能接客的日子按「整天關閉」。客人只看得到藍色（還有名額）的時段。</p>
+      <div class="bk-legend">
+        <span class="l-open">可以約</span><span class="l-full">已約滿</span><span class="l-closed">已關閉</span>
+      </div>
+      <div class="bk-cal" id="cal"></div>
+    </section>
+
+    <!-- 2. 最近的線上預約 -->
+    <section class="card">
+      <h2>線上預約名單</h2>
+      <ul class="list compact" id="onlineList"></ul>
+    </section>
+
+    <!-- 3. 每週固定時段 -->
+    <section class="card">
+      <h2>每週固定時段</h2>
+      <p class="info">每週都會開放的時段和名額（同一時段最多可以約幾台）。臨時不開放的，在上面「接下來的時段」關掉就好，不用改這裡。</p>
+      <div class="bk-week" id="week"></div>
+      <div class="bk-add">
+        <label>時間<input type="time" id="newTime" step="900" value="10:00"></label>
+        <label>名額<input type="number" id="newCap" min="1" max="20" value="1" style="width:70px"></label>
+        <div>
+          <div class="info" style="margin:0 0 4px">套用到</div>
+          <div class="bk-days" id="newDays"></div>
+        </div>
+        <button class="btn" onclick="addSlot()">加入時段</button>
+      </div>
+    </section>
+
+    <!-- 4. 基本設定 -->
+    <section class="card">
+      <h2>基本設定</h2>
+      <div class="bk-settings">
+        <label class="check"><input type="checkbox" id="sEnabled"> 開放線上預約</label>
+        <label>可以預約幾天內<input type="number" id="sDays" min="1" max="60"></label>
+        <label>最晚要幾小時前預約<input type="number" id="sHours" min="0" max="72"></label>
+      </div>
+      <label style="margin-top:12px">給客人看的說明<textarea id="sNotice" maxlength="300"></textarea></label>
+      <div class="form-actions">
+        <button class="btn" onclick="saveSettings()">儲存設定</button>
+      </div>
+      <h3>客人網站</h3>
+      <p class="info">把這個網址給客人（或放在 LINE 官方帳號的選單）。客人第一次用要輸入「綁定碼」，在「客戶查詢」打開客人後按「綁定 LINE」產生。</p>
+      <p><a id="siteLink" target="_blank" rel="noopener"></a>
+        <button class="btn-small" onclick="copySite()">複製網址</button></p>
+    </section>
+  </main>
+
+  <script>
+    const WEEK = "日一二三四五六";
+    const ORDER = [1, 2, 3, 4, 5, 6, 0];          // 畫面上從週一排到週日
+    let slots = [], blocks = [], settings = null;
+
+    const $ = id => document.getElementById(id);
+    function el(tag, className, text) {
+      const e = document.createElement(tag);
+      if (className) e.className = className;
+      if (text !== undefined) e.textContent = text;
+      return e;
+    }
+    function toast(message, type = "ok") {
+      let box = $("toastBox");
+      if (!box) { box = el("div"); box.id = "toastBox"; document.body.appendChild(box); }
+      const t = el("div", "toast " + type, message);
+      box.appendChild(t);
+      setTimeout(() => t.remove(), 4000);
+    }
+    function showError(error) {
+      const missing = /booking|available_slots|does not exist|schema cache|function/i.test(error.message);
+      $("msg").textContent = missing
+        ? "還沒啟用線上預約：請先到 Supabase 的 SQL Editor 執行「老闆版_客端與小助理.sql」。"
+        : "讀取失敗：" + error.message;
+    }
+    const hhmm = t => (t || "").slice(0, 5);
+    const today = () => new Date().toLocaleDateString("sv-SE");
+    const dayLabel = d => {
+      const w = WEEK[new Date(d + "T00:00").getDay()];
+      return `${Number(d.slice(5, 7))}/${Number(d.slice(8))}（${w}）`;
+    };
+
+    // ===== 讀資料 =====
+    async function loadAll() {
+      const [s, sl, bl] = await Promise.all([
+        db.from("booking_settings").select("*").eq("id", 1).maybeSingle(),
+        db.from("booking_slots").select("*").order("slot_time"),
+        db.from("booking_blocks").select("*").gte("date", today())
+      ]);
+      const err = s.error || sl.error || bl.error;
+      if (err) return showError(err);
+      settings = s.data || { enabled: true, days_ahead: 14, min_hours_ahead: 2, notice: "" };
+      slots = sl.data;
+      blocks = bl.data;
+      renderSettings();
+      renderWeek();
+      await Promise.all([loadCalendar(), loadOnline()]);
+    }
+
+    // ===== 1. 接下來的時段 =====
+    async function loadCalendar() {
+      const { data, error } = await db.rpc("available_slots");
+      if (error) return showError(error);
+      const box = $("cal");
+      box.innerHTML = "";
+      const byDate = {};
+      data.forEach(s => (byDate[s.date] ||= []).push(s));
+      const dates = Object.keys(byDate).sort();
+      $("calInfo").textContent = settings.enabled ? `未來 ${settings.days_ahead} 天` : "⚠ 線上預約目前暫停中";
+      if (!dates.length) {
+        box.appendChild(el("p", "empty", "還沒有設定每週固定時段，請在下面「每週固定時段」加入。"));
+        return;
+      }
+      dates.forEach(d => {
+        const list = byDate[d];
+        const dayBlock = blocks.find(b => b.date === d && !b.slot_time);
+        const card = el("div", "bk-date" + (dayBlock ? " closed-day" : ""));
+        const head = el("div", "bk-date-head");
+        const open = list.filter(s => !s.closed && s.remaining > 0).length;
+        const booked = list.reduce((n, s) => n + s.booked, 0);
+        const title = el("div");
+        title.append(el("b", "", dayLabel(d)),
+          el("span", "info", dayBlock ? "　整天關閉" + (dayBlock.reason ? "：" + dayBlock.reason : "") : `　剩 ${open} 個時段可約、已約 ${booked} 台`));
+        const btn = el("button", "btn-small " + (dayBlock ? "" : "btn-plain"), dayBlock ? "整天開放" : "整天關閉");
+        btn.onclick = () => toggleDay(d, dayBlock);
+        head.append(title, btn);
+
+        const chips = el("div", "bk-chips");
+        list.forEach(s => {
+          const slotBlock = blocks.find(b => b.date === d && hhmm(b.slot_time) === hhmm(s.slot_time));
+          const state = s.closed ? "closed" : s.remaining <= 0 ? "full" : "";
+          const chip = el("button", "bk-chip " + state);
+          chip.type = "button";
+          chip.append(hhmm(s.slot_time), el("small", "", s.closed ? "已關閉" : `已約 ${s.booked}/${s.capacity}`));
+          chip.title = s.closed ? "點一下重新開放" : "點一下關掉這個時段";
+          chip.onclick = () => toggleSlot(d, s.slot_time, slotBlock, dayBlock);
+          chips.appendChild(chip);
+        });
+        card.append(head, chips);
+        box.appendChild(card);
+      });
+    }
+
+    async function toggleDay(date, dayBlock) {
+      let error;
+      if (dayBlock) {
+        ({ error } = await db.from("booking_blocks").delete().eq("id", dayBlock.id));
+      } else {
+        const reason = prompt(`${dayLabel(date)} 整天不開放線上預約。\n要寫原因嗎？（例如：公休，可以不寫）`, "");
+        if (reason === null) return;
+        ({ error } = await db.from("booking_blocks").insert({ date, slot_time: null, reason: reason.trim() || null }));
+      }
+      if (error) return toast("失敗：" + error.message, "error");
+      toast(dayBlock ? `${dayLabel(date)} 已重新開放` : `${dayLabel(date)} 整天關閉了`);
+      loadAll();
+    }
+
+    async function toggleSlot(date, time, slotBlock, dayBlock) {
+      if (dayBlock) return toast("這天整天關閉中，要先按「整天開放」", "error");
+      const { error } = slotBlock
+        ? await db.from("booking_blocks").delete().eq("id", slotBlock.id)
+        : await db.from("booking_blocks").insert({ date, slot_time: time });
+      if (error) return toast("失敗：" + error.message, "error");
+      toast(`${dayLabel(date)} ${hhmm(time)} ${slotBlock ? "已重新開放" : "已關掉"}`);
+      loadAll();
+    }
+
+    // ===== 2. 線上預約名單 =====
+    async function loadOnline() {
+      const { data, error } = await db.from("appointments")
+        .select("*").eq("source", "線上").gte("date", today())
+        .order("date").order("time", { nullsFirst: false }).limit(100);
+      const ul = $("onlineList");
+      ul.innerHTML = "";
+      if (error) return ul.appendChild(el("li", "empty", "讀取失敗：" + error.message));
+      if (!data.length) return ul.appendChild(el("li", "empty", "目前沒有線上預約"));
+      data.forEach(a => {
+        const li = el("li", a.status === "預約中" ? "" : "faded");
+        const main = el("div", "main");
+        main.append(
+          el("div", "", `${dayLabel(a.date)} ${hhmm(a.time)}　${a.name || ""}　${a.items || "（沒寫項目）"}`),
+          el("div", "sub", [a.plate, a.status !== "預約中" ? a.status : ""].filter(Boolean).join("｜")));
+        li.appendChild(main);
+        ul.appendChild(li);
+      });
+    }
+
+    // ===== 3. 每週固定時段 =====
+    function renderWeek() {
+      const box = $("week");
+      box.innerHTML = "";
+      ORDER.forEach(w => {
+        const mine = slots.filter(s => s.weekday === w);
+        const day = el("div", "bk-day" + (mine.length ? "" : " off"));
+        day.appendChild(el("h4", "", "週" + WEEK[w]));
+        if (!mine.length) day.appendChild(el("div", "info", "不開放"));
+        mine.forEach(s => {
+          const row = el("div", "bk-slot");
+          const label = el("span", "", hhmm(s.slot_time) + " ");
+          label.appendChild(el("small", "", s.capacity + " 台"));
+          const del = el("button", "", "✕");
+          del.title = "刪除這個時段";
+          del.onclick = () => deleteSlot(s);
+          row.append(label, del);
+          day.appendChild(row);
+        });
+        box.appendChild(day);
+      });
+
+      const days = $("newDays");
+      if (!days.children.length) {
+        ORDER.forEach(w => {
+          const lb = el("label");
+          const cb = el("input");
+          cb.type = "checkbox";
+          cb.value = w;
+          cb.checked = w !== 0;      // 預設週一到週六
+          lb.append(cb, "週" + WEEK[w]);
+          days.appendChild(lb);
+        });
+      }
+    }
+
+    async function addSlot() {
+      const time = $("newTime").value;
+      const capacity = Math.max(1, Math.min(20, Number($("newCap").value) || 1));
+      const days = [...$("newDays").querySelectorAll("input:checked")].map(c => Number(c.value));
+      if (!time) return toast("請選時間", "error");
+      if (!days.length) return toast("請勾選星期幾", "error");
+      const rows = days.map(weekday => ({ weekday, slot_time: time, capacity }));
+      const { error } = await db.from("booking_slots").upsert(rows, { onConflict: "weekday,slot_time" });
+      if (error) return toast("加入失敗：" + error.message, "error");
+      toast(`已加入 ${time}（${capacity} 台）`);
+      loadAll();
+    }
+
+    async function deleteSlot(s) {
+      if (!confirm(`確定刪除每週${WEEK[s.weekday]} ${hhmm(s.slot_time)} 這個時段嗎？\n已經約好的預約不會被刪掉。`)) return;
+      const { error } = await db.from("booking_slots").delete().eq("id", s.id);
+      if (error) return toast("刪除失敗：" + error.message, "error");
+      loadAll();
+    }
+
+    // ===== 4. 基本設定 =====
+    function renderSettings() {
+      $("sEnabled").checked = settings.enabled;
+      $("sDays").value = settings.days_ahead;
+      $("sHours").value = settings.min_hours_ahead;
+      $("sNotice").value = settings.notice || "";
+      const site = new URL("customer/", location.href).href;
+      $("siteLink").href = site;
+      $("siteLink").textContent = site;
+    }
+
+    async function saveSettings() {
+      const row = {
+        id: 1,
+        enabled: $("sEnabled").checked,
+        days_ahead: Math.max(1, Math.min(60, Number($("sDays").value) || 14)),
+        min_hours_ahead: Math.max(0, Math.min(72, Number($("sHours").value) || 0)),
+        notice: $("sNotice").value.trim() || null
+      };
+      const { error } = await db.from("booking_settings").upsert(row);
+      if (error) return toast("儲存失敗：" + error.message, "error");
+      toast("設定已儲存");
+      loadAll();
+    }
+
+    function copySite() {
+      navigator.clipboard.writeText($("siteLink").href).then(() => toast("網址已複製"));
+    }
+
+    db.auth.getSession().then(({ data }) => {
+      if (!data.session) location.href = "index.html";
+      else loadAll();
+    });
+  </script>
+</body>
+</html>

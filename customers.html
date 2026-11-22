@@ -15,6 +15,7 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="config.js"></script>
   <script src="ui.js" defer></script>
+  <script src="assistant.js" defer></script>
 </head>
 <body>
   <header class="topbar">
@@ -24,6 +25,7 @@
       <button class="btn-ghost" onclick="location.href='customers.html'">客戶查詢</button>
       <button class="btn-ghost" onclick="location.href='bikes.html'">車輛總覽</button>
       <button class="btn-ghost" onclick="location.href='inventory.html'">庫存</button>
+      <button class="btn-ghost" onclick="location.href='booking.html'">線上預約</button>
       <button class="btn-ghost" onclick="location.href='analytics.html'">數據分析</button>
       <button class="btn-ghost" onclick="location.href='import.html'">匯入／備份</button>
     </div>
@@ -75,6 +77,30 @@
         <button class="btn" onclick="searchMergeTarget()">找</button>
       </div>
       <ul class="list" id="mergeList"></ul>
+    </div>
+  </div>
+
+  <!-- 綁定 LINE：產生綁定碼給客人，客人在客人網站輸入後就能看自己的紀錄、線上預約 -->
+  <div class="modal" id="bindModal" hidden onclick="if (event.target === this) closeModals()">
+    <div class="modal-box">
+      <div class="modal-head">
+        <h2>綁定 LINE</h2>
+        <button class="btn-small" onclick="closeModals()">關閉</button>
+      </div>
+      <div class="bind-box">
+        <p class="info" id="bindWho"></p>
+        <div id="bindResult" hidden>
+          <div class="bind-code" id="bindCode"></div>
+          <p class="info">7 天內有效、只能用一次。把下面的連結傳給客人，客人用 LINE 登入後就會自動綁好。</p>
+          <p class="bind-link" id="bindLink"></p>
+          <div class="notify-actions">
+            <a class="btn btn-line" id="bindLine" target="_blank" rel="noopener">用 LINE 傳給客人</a>
+            <button class="btn-small" onclick="copyBind()">複製訊息</button>
+          </div>
+        </div>
+        <button class="btn" id="bindMake" onclick="makeBindCode()">產生綁定碼</button>
+        <ul class="bind-accounts" id="bindAccounts"></ul>
+      </div>
     </div>
   </div>
 
@@ -205,7 +231,9 @@
       mergeBtn.onclick = () => openMerge(c);
       const delBtn = el("button", "btn-small btn-danger", "刪除");
       delBtn.onclick = () => deleteCustomer(c);
-      actions.append(editBtn, mergeBtn, delBtn);
+      const bindBtn = el("button", "btn-small", "綁定 LINE");
+      bindBtn.onclick = () => openBind(c);
+      actions.append(editBtn, mergeBtn, bindBtn, delBtn);
 
       card.append(head, stats, el("h3", "", "名下車輛"), list, actions);
       return card;
@@ -241,6 +269,7 @@
     function closeModals() {
       document.getElementById("editModal").hidden = true;
       document.getElementById("mergeModal").hidden = true;
+      document.getElementById("bindModal").hidden = true;
     }
     document.addEventListener("keydown", e => { if (e.key === "Escape") closeModals(); });
 
@@ -345,12 +374,77 @@
       const { error: e2 } = await db.from("customers").update({ note }).eq("id", target.id);
       if (e2) return alert("合併失敗（寫備註時）：" + e2.message);
 
+      // 綁定的 LINE 帳號也一起移過去（還沒啟用客人網站時，這張表不存在，略過）
+      await db.from("customer_accounts").update({ customer_id: target.id }).eq("customer_id", from.id);
+
       // 3. 刪掉舊客戶（車已經移走了，不會被一起刪）
       const { error: e3 } = await db.from("customers").delete().eq("id", from.id);
       if (e3) return alert("合併失敗（刪舊客戶時）：" + e3.message);
 
       document.getElementById("q").value = target.phone || target.name;
       done(`已把「${from.name}」合併到「${target.name}」`);
+    }
+
+    // ===== 綁定 LINE =====
+    let binding = null;   // 正在產生綁定碼的客戶
+    let bindMessage = "";
+
+    async function openBind(c) {
+      binding = c;
+      document.getElementById("bindWho").textContent = `客戶：${c.name || "未填姓名"}`;
+      document.getElementById("bindResult").hidden = true;
+      document.getElementById("bindMake").hidden = false;
+      document.getElementById("bindModal").hidden = false;
+      loadBindAccounts();
+    }
+
+    // 已經綁定的 LINE 帳號（可以解除）
+    async function loadBindAccounts() {
+      const ul = document.getElementById("bindAccounts");
+      ul.innerHTML = "";
+      const { data, error } = await db.from("customer_accounts")
+        .select("user_id, display_name, created_at").eq("customer_id", binding.id).order("created_at");
+      if (error) {
+        ul.appendChild(el("li", "info", /customer_accounts|schema cache|does not exist/i.test(error.message)
+          ? "還沒啟用客人網站：請先在 Supabase 執行「老闆版_客端與小助理.sql」。"
+          : "讀取失敗：" + error.message));
+        document.getElementById("bindMake").hidden = true;
+        return;
+      }
+      if (!data.length) {
+        ul.appendChild(el("li", "info", "還沒有綁定任何 LINE 帳號"));
+        return;
+      }
+      ul.appendChild(el("li", "info", `已綁定 ${data.length} 個 LINE 帳號：`));
+      data.forEach(a => {
+        const li = el("li");
+        const when = new Date(a.created_at).toLocaleDateString("zh-TW");
+        const off = el("button", "btn-small btn-danger", "解除");
+        off.onclick = async () => {
+          if (!confirm(`確定解除「${a.display_name || "這個 LINE 帳號"}」的綁定嗎？解除後他就看不到紀錄了。`)) return;
+          const { error } = await db.from("customer_accounts").delete().eq("user_id", a.user_id);
+          if (error) return alert("解除失敗：" + error.message);
+          loadBindAccounts();
+        };
+        li.append(el("span", "", `${a.display_name || "（沒有名字）"}　${when} 綁定`), off);
+        ul.appendChild(li);
+      });
+    }
+
+    async function makeBindCode() {
+      const { data: code, error } = await db.rpc("create_bind_code", { p_customer_id: binding.id });
+      if (error) return alert("產生失敗：" + error.message);
+      const link = new URL("customer/?bind=" + code, location.href).href;
+      bindMessage = `您好，這裡是竹北榮詮機車行。\n點下面的連結用 LINE 登入，就能查詢保養紀錄、線上預約：\n${link}\n（綁定碼：${code}，7 天內有效）`;
+      document.getElementById("bindCode").textContent = code;
+      document.getElementById("bindLink").textContent = link;
+      document.getElementById("bindLine").href = "https://line.me/R/share?text=" + encodeURIComponent(bindMessage);
+      document.getElementById("bindResult").hidden = false;
+      document.getElementById("bindMake").hidden = true;
+    }
+
+    function copyBind() {
+      navigator.clipboard.writeText(bindMessage).then(() => alert("已複製，可以貼到 LINE 或簡訊傳給客人"));
     }
 
     function openButton(plate) {

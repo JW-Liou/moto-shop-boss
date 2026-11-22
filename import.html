@@ -16,6 +16,7 @@
   <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
   <script src="config.js"></script>
   <script src="ui.js" defer></script>
+  <script src="assistant.js" defer></script>
 </head>
 <body>
   <header class="topbar">
@@ -25,6 +26,7 @@
       <button class="btn-ghost" onclick="location.href='customers.html'">客戶查詢</button>
       <button class="btn-ghost" onclick="location.href='bikes.html'">車輛總覽</button>
       <button class="btn-ghost" onclick="location.href='inventory.html'">庫存</button>
+      <button class="btn-ghost" onclick="location.href='booking.html'">線上預約</button>
       <button class="btn-ghost" onclick="location.href='analytics.html'">數據分析</button>
       <button class="btn-ghost" onclick="location.href='import.html'">匯入／備份</button>
     </div>
@@ -339,7 +341,11 @@
       { table: "parts", sheet: "零件", optional: true },
       { table: "purchase_orders", sheet: "叫貨單", optional: true },
       { table: "purchase_order_items", sheet: "叫貨明細", optional: true },
-      { table: "stock_moves", sheet: "庫存進出", optional: true }
+      { table: "stock_moves", sheet: "庫存進出", optional: true },
+      // 線上預約時段（還沒啟用的話會自動跳過）
+      { table: "booking_settings", sheet: "預約設定", optional: true },
+      { table: "booking_slots", sheet: "預約時段", optional: true },
+      { table: "booking_blocks", sheet: "關閉的時段", optional: true }
     ];
 
     // Supabase 一次最多給 1000 筆，這裡一頁一頁拿，直到拿完

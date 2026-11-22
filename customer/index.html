@@ -1,0 +1,506 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>竹北榮詮｜保養紀錄・線上預約</title>
+  <meta name="theme-color" content="#0b1120">
+  <link rel="icon" href="../icon-192.png">
+  <link rel="apple-touch-icon" href="../icon-180.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&display=swap">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    :root {
+      --bg: #f1f5f9; --card: #fff; --text: #0f172a; --muted: #64748b; --line: #e2e8f0;
+      --blue: #1d4ed8; --blue-soft: #eff6ff; --dark: #0b1120; --green: #06c755;
+      --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+    }
+    * { box-sizing: border-box; }
+    [hidden] { display: none !important; }
+    body { margin: 0; font-family: "Noto Sans TC", system-ui, -apple-system, "Microsoft JhengHei", sans-serif; background: var(--bg); color: var(--text); line-height: 1.55; -webkit-tap-highlight-color: transparent; }
+    header { background: linear-gradient(120deg, #020617, #0b1120 55%, #172554); color: #fff; padding: 18px 18px 22px; padding-top: max(18px, env(safe-area-inset-top)); border-bottom: 2px solid #2563eb; }
+    header .row { max-width: 560px; margin: 0 auto; display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+    .brand { font-weight: 900; font-size: 20px; letter-spacing: 0.08em; }
+    .brand small { display: block; font-weight: 500; font-size: 12.5px; letter-spacing: 0.04em; color: #93c5fd; }
+    .hello { max-width: 560px; margin: 10px auto 0; font-size: 15px; color: #cbd5e1; }
+    .hello b { color: #fff; font-size: 18px; }
+    main { max-width: 560px; margin: 0 auto; padding: 14px 14px 60px; }
+    .card { background: var(--card); border-radius: 16px; padding: 16px; margin-bottom: 14px; box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08); animation: rise 0.3s var(--ease) both; }
+    @keyframes rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+    h2 { margin: 0 0 10px; font-size: 18px; display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+    .muted { color: var(--muted); font-size: 14px; }
+    .msg { color: #b91c1c; font-weight: 600; min-height: 0; margin: 8px 0 0; }
+    .msg:empty { display: none; }
+    button, .btn { font: inherit; border: 0; cursor: pointer; border-radius: 12px; transition: transform 0.15s var(--ease), filter 0.15s; }
+    button:active { transform: scale(0.97); }
+    .btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 13px 18px; font-weight: 700; font-size: 16px; color: #fff; background: linear-gradient(180deg, #2563eb, #1d4ed8); width: 100%; text-decoration: none; }
+    .btn:disabled { filter: grayscale(0.6) opacity(0.6); cursor: default; }
+    .btn.line { background: var(--green); }
+    .btn.ghost { background: #e2e8f0; color: var(--text); }
+    .btn-mini { padding: 6px 12px; font-size: 14px; background: #e2e8f0; color: var(--text); border-radius: 10px; }
+    .btn-mini.danger { background: #fee2e2; color: #b91c1c; }
+    input, textarea, select { font: inherit; font-size: 16px; width: 100%; padding: 12px 14px; border: 1px solid #cbd5e1; border-radius: 12px; background: #fff; }
+    input:focus, textarea:focus { outline: 2px solid #93c5fd; border-color: #3b82f6; }
+    .code-input { text-transform: uppercase; letter-spacing: 0.2em; font-size: 22px; font-weight: 700; text-align: center; }
+
+    .login { text-align: center; padding: 28px 18px; }
+    .login .big { font-size: 46px; }
+
+    .tabs { display: flex; gap: 6px; background: #e2e8f0; padding: 4px; border-radius: 14px; margin-bottom: 14px; }
+    .tabs button { flex: 1; padding: 10px; background: transparent; font-weight: 700; color: #475569; }
+    .tabs button.active { background: #fff; color: var(--blue); box-shadow: 0 1px 3px rgba(15, 23, 42, 0.12); }
+
+    .bike-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+    .plate { display: inline-block; background: #fff; border: 2px solid var(--dark); border-radius: 8px; padding: 2px 10px; font-weight: 900; letter-spacing: 0.08em; font-variant-numeric: tabular-nums; }
+    .tip { background: var(--blue-soft); color: #1e3a8a; border-radius: 10px; padding: 8px 12px; font-size: 14px; margin: 10px 0 0; }
+    .rec { border-top: 1px solid var(--line); padding: 12px 0; }
+    .rec:first-of-type { border-top: 0; }
+    .rec-top { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+    .rec-date { font-weight: 700; }
+    .rec-total { font-weight: 900; font-size: 17px; font-variant-numeric: tabular-nums; }
+    .rec-items { margin: 2px 0; }
+    .rec-sub { color: var(--muted); font-size: 13.5px; }
+    .badge { display: inline-block; font-size: 12px; font-weight: 700; padding: 1px 8px; border-radius: 999px; margin-left: 6px; vertical-align: 2px; }
+    .badge.doing { background: #fef3c7; color: #92400e; }
+    .badge.todo { background: #e0e7ff; color: #3730a3; }
+    .more { width: 100%; margin-top: 6px; }
+
+    .appt { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 10px 0; border-top: 1px solid var(--line); }
+    .appt:first-of-type { border-top: 0; }
+    .appt b { font-size: 16px; }
+
+    .step { margin: 16px 0 8px; font-weight: 700; font-size: 15px; }
+    .step span { display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; background: var(--blue); color: #fff; font-size: 13px; margin-right: 6px; }
+    .chips { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; scroll-snap-type: x mandatory; }
+    .chips.wrap { flex-wrap: wrap; overflow: visible; }
+    .chip { flex: none; scroll-snap-align: start; padding: 9px 14px; background: #fff; border: 1.5px solid #cbd5e1; color: var(--text); border-radius: 12px; font-weight: 600; text-align: center; line-height: 1.25; }
+    .chip small { display: block; font-weight: 500; font-size: 12px; color: var(--muted); }
+    .chip.on { border-color: var(--blue); background: var(--blue); color: #fff; }
+    .chip.on small { color: #dbeafe; }
+    .summary { background: #f8fafc; border: 1px dashed #93c5fd; border-radius: 12px; padding: 10px 12px; margin: 14px 0 10px; }
+    .done { text-align: center; padding: 10px 0; }
+    .done .big { font-size: 44px; }
+    footer { text-align: center; color: var(--muted); font-size: 12.5px; padding: 0 16px 30px; }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="row">
+      <div class="brand">竹北榮詮<small>保養紀錄・線上預約</small></div>
+      <button class="btn-mini" id="logoutBtn" hidden onclick="logout()">登出</button>
+    </div>
+    <div class="hello" id="hello" hidden></div>
+  </header>
+
+  <main>
+    <!-- 載入中 -->
+    <section class="card" id="loading"><p class="muted">載入中…</p></section>
+
+    <!-- 1. 登入 -->
+    <section class="card login" id="loginView" hidden>
+      <div class="big">🛵</div>
+      <h2 style="justify-content:center">查保養紀錄、線上預約</h2>
+      <p class="muted">用 LINE 登入，不用另外記帳號密碼。<br>第一次使用需要店家給的「綁定碼」。</p>
+      <button class="btn line" onclick="loginLine()">用 LINE 登入</button>
+      <p class="msg" id="loginMsg"></p>
+    </section>
+
+    <!-- 2. 綁定 -->
+    <section class="card" id="bindView" hidden>
+      <h2>輸入綁定碼</h2>
+      <p class="muted">請輸入店家給您的 8 碼綁定碼，綁定後就能看到您的車和保養紀錄。沒有綁定碼的話，請到店裡或打電話跟我們要。</p>
+      <input class="code-input" id="bindCode" maxlength="12" autocomplete="off" placeholder="例如 AB3K7Q2M">
+      <p class="msg" id="bindMsg"></p>
+      <div style="margin-top:12px"><button class="btn" id="bindBtn" onclick="bind()">綁定</button></div>
+    </section>
+
+    <!-- 3. 主畫面 -->
+    <div id="mainView" hidden>
+      <div class="tabs" id="tabs">
+        <button data-tab="book" class="active">預約</button>
+        <button data-tab="records">我的車和紀錄</button>
+      </div>
+
+      <div id="tab-book">
+        <section class="card" id="myAppts"></section>
+
+        <section class="card" id="bookCard">
+          <h2>線上預約</h2>
+          <p class="muted" id="notice"></p>
+          <div id="bookForm">
+            <div id="bikeStep">
+              <div class="step"><span>1</span>哪一台車</div>
+              <div class="chips wrap" id="bikeChips"></div>
+            </div>
+            <div class="step"><span id="dateNo">2</span>哪一天</div>
+            <div class="chips" id="dateChips"></div>
+            <div class="step"><span id="timeNo">3</span>幾點</div>
+            <div class="chips wrap" id="timeChips"><p class="muted">請先選日期</p></div>
+            <div class="step"><span id="itemNo">4</span>想做什麼（選填）</div>
+            <div class="chips wrap" id="itemChips"></div>
+            <input id="items" maxlength="100" placeholder="例如：換機油、煞車有異音" style="margin-top:8px">
+            <div class="summary" id="summary" hidden></div>
+            <p class="msg" id="bookMsg"></p>
+            <button class="btn" id="bookBtn" onclick="book()" disabled>確認預約</button>
+          </div>
+          <div class="done" id="bookDone" hidden>
+            <div class="big">✅</div>
+            <h2 style="justify-content:center">預約好了！</h2>
+            <p id="doneText"></p>
+            <button class="btn ghost" onclick="resetBooking()">再約一個</button>
+          </div>
+        </section>
+      </div>
+
+      <div id="tab-records" hidden></div>
+    </div>
+  </main>
+  <footer>竹北榮詮機車行</footer>
+
+  <script>
+    // 跟老闆版用同一個資料庫（如果換資料庫，這裡和 ../config.js 都要改）
+    const SUPABASE_URL = "https://kqkezlofptqgybevuehf.supabase.co";
+    const SUPABASE_KEY = "sb_publishable_t5CB75GK5SDeZq4Jhkb-WQ_-1CfodVX";
+    const LINE_PROVIDER = "custom:line";   // Supabase 上設定的 LINE 登入名稱
+    const QUICK_ITEMS = ["定期保養", "換機油", "換齒輪油", "輪胎", "煞車", "電瓶", "檢查異音"];
+
+    // 用自己的登入儲存位置，不會跟同一台電腦上的店家系統互相登出
+    const db = supabase.createClient(SUPABASE_URL, SUPABASE_KEY, {
+      auth: { storageKey: "rq-customer-auth", flowType: "pkce", detectSessionInUrl: true }
+    });
+
+    const $ = id => document.getElementById(id);
+    const WEEK = "日一二三四五六";
+    const money = n => "NT$ " + (n || 0).toLocaleString();
+    const hhmm = t => (t || "").slice(0, 5);
+    const dayLabel = d => `${Number(d.slice(5, 7))}/${Number(d.slice(8))}（${WEEK[new Date(d + "T00:00").getDay()]}）`;
+    function el(tag, className, text) {
+      const e = document.createElement(tag);
+      if (className) e.className = className;
+      if (text !== undefined) e.textContent = text;
+      return e;
+    }
+    const store = {
+      get: k => { try { return localStorage.getItem(k); } catch (e) { return null; } },
+      set: (k, v) => { try { v == null ? localStorage.removeItem(k) : localStorage.setItem(k, v); } catch (e) { /* 無痕模式 */ } }
+    };
+    function friendly(error) {
+      const m = error?.message || String(error);
+      if (/my_info|bind_customer|book_online|available_slots|schema cache|function/i.test(m) && !/[一-鿿]/.test(m)) {
+        return "系統還在準備中，請稍後再試，或直接打電話預約。";
+      }
+      return m;
+    }
+
+    let me = null;        // my_info 的結果
+    let slots = [];
+    let pick = { bike: null, date: null, time: null };
+
+    function show(view) {
+      ["loading", "loginView", "bindView", "mainView"].forEach(v => $(v).hidden = v !== view);
+      $("logoutBtn").hidden = view === "loginView" || view === "loading";
+    }
+
+    // ===== 啟動 =====
+    async function start() {
+      // 店家傳來的連結會帶 ?bind=綁定碼，先記下來（登入會跳到 LINE 再回來）
+      const params = new URLSearchParams(location.search);
+      if (params.get("bind")) {
+        store.set("rq-bind", params.get("bind"));
+        params.delete("bind");
+        history.replaceState(null, "", location.pathname + (params.toString() ? "?" + params : ""));
+      }
+      const errText = params.get("error_description");
+      const { data } = await db.auth.getSession();
+      if (!data.session) {
+        show("loginView");
+        if (errText) $("loginMsg").textContent = "登入沒有成功：" + errText;
+        return;
+      }
+      await loadMe();
+    }
+
+    async function loginLine() {
+      $("loginMsg").textContent = "";
+      const { error } = await db.auth.signInWithOAuth({
+        provider: LINE_PROVIDER,
+        options: { redirectTo: location.origin + location.pathname }
+      });
+      if (error) $("loginMsg").textContent = /provider|not enabled|unsupported/i.test(error.message)
+        ? "LINE 登入還沒設定好，請聯絡店家。"
+        : "登入失敗：" + error.message;
+    }
+
+    async function logout() {
+      await db.auth.signOut();
+      location.reload();
+    }
+
+    async function loadMe() {
+      const { data, error } = await db.rpc("my_info");
+      if (error) {
+        show("bindView");
+        $("bindMsg").textContent = friendly(error);
+        return;
+      }
+      me = data;
+      if (!me.bound) {
+        show("bindView");
+        const saved = store.get("rq-bind");
+        if (saved) {
+          $("bindCode").value = saved;
+          bind();          // 從連結來的，自動幫忙綁定
+        }
+        return;
+      }
+      $("hello").innerHTML = "";
+      $("hello").append("您好，", el("b", "", me.name), "　歡迎回來");
+      $("hello").hidden = false;
+      show("mainView");
+      renderAppts();
+      renderRecords();
+      setupBooking();
+    }
+
+    // ===== 綁定 =====
+    async function bind() {
+      const code = $("bindCode").value.trim();
+      $("bindMsg").textContent = "";
+      if (!code) return ($("bindMsg").textContent = "請輸入綁定碼");
+      $("bindBtn").disabled = true;
+      const { data: { user } } = await db.auth.getUser();
+      const meta = user?.user_metadata || {};
+      const { error } = await db.rpc("bind_customer", {
+        p_code: code,
+        p_display_name: meta.name || meta.full_name || meta.nickname || null
+      });
+      $("bindBtn").disabled = false;
+      store.set("rq-bind", null);
+      if (error) return ($("bindMsg").textContent = friendly(error));
+      await loadMe();
+    }
+
+    // ===== 分頁 =====
+    $("tabs").onclick = e => {
+      const b = e.target.closest("button");
+      if (!b) return;
+      document.querySelectorAll("#tabs button").forEach(x => x.classList.toggle("active", x === b));
+      $("tab-book").hidden = b.dataset.tab !== "book";
+      $("tab-records").hidden = b.dataset.tab !== "records";
+    };
+
+    // ===== 我的預約 =====
+    function renderAppts() {
+      const box = $("myAppts");
+      box.innerHTML = "";
+      box.appendChild(el("h2", "", "我的預約"));
+      if (!me.appointments.length) {
+        box.appendChild(el("p", "muted", "目前沒有預約。"));
+        return;
+      }
+      me.appointments.forEach(a => {
+        const row = el("div", "appt");
+        const info = el("div");
+        info.append(el("b", "", `${dayLabel(a.date)} ${hhmm(a.time)}`),
+          el("div", "muted", [a.plate, a.items].filter(Boolean).join("｜")));
+        const cancel = el("button", "btn-mini danger", "取消");
+        cancel.onclick = async () => {
+          if (!confirm(`確定取消 ${dayLabel(a.date)} ${hhmm(a.time)} 的預約嗎？`)) return;
+          const { error } = await db.rpc("cancel_my_booking", { p_id: a.id });
+          if (error) return alert(friendly(error));
+          await loadMe();
+        };
+        row.append(info, cancel);
+        box.appendChild(row);
+      });
+    }
+
+    // ===== 我的車和保養紀錄 =====
+    function renderRecords() {
+      const box = $("tab-records");
+      box.innerHTML = "";
+      if (!me.bikes.length) {
+        const c = el("section", "card");
+        c.appendChild(el("p", "muted", "還沒有登記的車，請跟店家說。"));
+        box.appendChild(c);
+        return;
+      }
+      me.bikes.forEach(b => {
+        const card = el("section", "card");
+        const head = el("div", "bike-head");
+        head.append(el("span", "plate", b.plate), el("b", "", b.model || ""),
+          el("span", "muted", b.mileage ? `里程 ${b.mileage.toLocaleString()} 公里` : ""));
+        card.appendChild(head);
+
+        const recs = me.records.filter(r => r.plate === b.plate);
+        const next = recs.find(r => r.next_service_km);
+        if (next) card.appendChild(el("p", "tip", `建議下次保養：${next.next_service_km.toLocaleString()} 公里`));
+        if (!recs.length) card.appendChild(el("p", "muted", "還沒有保養紀錄。"));
+
+        const list = el("div");
+        const draw = n => {
+          list.innerHTML = "";
+          recs.slice(0, n).forEach(r => list.appendChild(recordRow(r)));
+          more.hidden = recs.length <= n;
+        };
+        const more = el("button", "btn ghost more", "看更多紀錄");
+        let shown = 5;
+        more.onclick = () => draw(shown += 10);
+        card.append(list, more);
+        draw(shown);
+
+        const spend = recs.filter(r => r.status === "已完成").reduce((s, r) => s + (r.total || 0), 0);
+        if (recs.length) card.appendChild(el("p", "muted", `共 ${recs.length} 筆紀錄，累計 ${money(spend)}`));
+        box.appendChild(card);
+      });
+    }
+
+    function recordRow(r) {
+      const row = el("div", "rec");
+      const top = el("div", "rec-top");
+      const left = el("span", "rec-date", r.date.replaceAll("-", "/"));
+      if (r.status !== "已完成") left.appendChild(el("span", "badge " + (r.status === "維修中" ? "doing" : "todo"), r.status));
+      top.append(left, el("span", "rec-total", money(r.total)));
+      row.append(top, el("div", "rec-items", r.items));
+      const sub = [r.parts ? "零件：" + r.parts : "", r.mileage ? `里程 ${r.mileage.toLocaleString()} 公里` : ""].filter(Boolean).join("｜");
+      if (sub) row.appendChild(el("div", "rec-sub", sub));
+      return row;
+    }
+
+    // ===== 線上預約 =====
+    async function setupBooking() {
+      $("notice").textContent = me.notice || "";
+      if (!me.booking_enabled) {
+        $("bookForm").hidden = true;
+        $("notice").textContent = "目前暫停線上預約，請直接打電話或到店預約。";
+        return;
+      }
+      if (!me.bikes.length) {
+        $("bookForm").hidden = true;
+        $("notice").textContent = "還沒有登記的車，請跟店家說。";
+        return;
+      }
+      // 車
+      const bikeChips = $("bikeChips");
+      bikeChips.innerHTML = "";
+      me.bikes.forEach(b => {
+        const c = el("button", "chip");
+        c.type = "button";
+        c.append(b.plate, el("small", "", b.model || ""));
+        c.onclick = () => { pick.bike = b; mark(bikeChips, c); update(); };
+        bikeChips.appendChild(c);
+      });
+      // 只有一台車就不用選
+      const one = me.bikes.length === 1;
+      $("bikeStep").hidden = one;
+      if (one) pick.bike = me.bikes[0];
+      ["dateNo", "timeNo", "itemNo"].forEach((id, i) => $(id).textContent = (one ? 1 : 2) + i);
+      // 項目
+      const itemChips = $("itemChips");
+      itemChips.innerHTML = "";
+      QUICK_ITEMS.forEach(t => {
+        const c = el("button", "chip", t);
+        c.type = "button";
+        c.onclick = () => {
+          c.classList.toggle("on");
+          const list = [...itemChips.querySelectorAll(".on")].map(x => x.textContent);
+          $("items").value = list.join("、");
+          update();
+        };
+        itemChips.appendChild(c);
+      });
+      $("items").oninput = update;
+      await loadSlots();
+    }
+
+    async function loadSlots() {
+      const { data, error } = await db.rpc("available_slots");
+      if (error) {
+        $("bookMsg").textContent = friendly(error);
+        return;
+      }
+      slots = data;
+      const dates = [...new Set(slots.map(s => s.date))];
+      const box = $("dateChips");
+      box.innerHTML = "";
+      if (!dates.length) {
+        box.appendChild(el("p", "muted", "最近的時段都約滿了，請直接打電話問問看。"));
+        return;
+      }
+      dates.forEach(d => {
+        const c = el("button", "chip");
+        c.type = "button";
+        c.append(dayLabel(d).replace(/（.）/, ""), el("small", "", "週" + WEEK[new Date(d + "T00:00").getDay()]));
+        c.onclick = () => { pick.date = d; pick.time = null; mark(box, c); renderTimes(); update(); };
+        box.appendChild(c);
+      });
+      // 原本選的日期還在就保留
+      if (pick.date && !dates.includes(pick.date)) pick.date = null;
+      renderTimes();
+      update();
+    }
+
+    function renderTimes() {
+      const box = $("timeChips");
+      box.innerHTML = "";
+      if (!pick.date) return box.appendChild(el("p", "muted", "請先選日期"));
+      slots.filter(s => s.date === pick.date).forEach(s => {
+        const c = el("button", "chip");
+        c.type = "button";
+        c.append(hhmm(s.slot_time), el("small", "", `剩 ${s.remaining} 位`));
+        c.onclick = () => { pick.time = s.slot_time; mark(box, c); update(); };
+        box.appendChild(c);
+      });
+    }
+
+    function mark(box, chip) {
+      box.querySelectorAll(".chip").forEach(x => x.classList.toggle("on", x === chip));
+    }
+
+    function update() {
+      const ok = pick.bike && pick.date && pick.time;
+      $("bookBtn").disabled = !ok;
+      $("summary").hidden = !ok;
+      if (ok) {
+        $("summary").textContent = `${pick.bike.plate}　${dayLabel(pick.date)} ${hhmm(pick.time)}` +
+          ($("items").value.trim() ? `\n${$("items").value.trim()}` : "");
+        $("summary").style.whiteSpace = "pre-line";
+      }
+    }
+
+    async function book() {
+      $("bookMsg").textContent = "";
+      $("bookBtn").disabled = true;
+      const { error } = await db.rpc("book_online", {
+        p_bike_id: pick.bike.id,
+        p_date: pick.date,
+        p_time: pick.time,
+        p_items: $("items").value.trim() || null
+      });
+      if (error) {
+        $("bookMsg").textContent = friendly(error);
+        await loadSlots();   // 可能剛好被別人約走，重新整理時段
+        return;
+      }
+      $("doneText").textContent = `${pick.bike.plate}　${dayLabel(pick.date)} ${hhmm(pick.time)}，到時候見！`;
+      $("bookForm").hidden = true;
+      $("bookDone").hidden = false;
+      const { data } = await db.rpc("my_info");
+      if (data) { me = data; renderAppts(); }
+    }
+
+    function resetBooking() {
+      pick = { bike: me.bikes.length === 1 ? me.bikes[0] : null, date: null, time: null };
+      $("items").value = "";
+      document.querySelectorAll("#bookForm .chip.on").forEach(c => c.classList.remove("on"));
+      $("bookDone").hidden = true;
+      $("bookForm").hidden = false;
+      loadSlots();
+    }
+
+    start();
+  </script>
+</body>
+</html>
