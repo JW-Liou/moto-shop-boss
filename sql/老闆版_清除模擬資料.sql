@@ -1,7 +1,7 @@
 -- =====================================================================
 -- 老闆版：清除全部模擬資料（交給老闆前一定要跑！）
 -- 會清空：客戶、車輛、工單、預約、便條、操作紀錄、零件、廠商、叫貨單、庫存進出、
---         客人的 LINE 綁定、綁定碼、測試時關掉的預約時段
+--         客人的 LINE 綁定、綁定碼、測試時關掉的預約時段、老闆專區的進價和支出
 -- 會保留：員工名單（老闆的登入帳號）、每週固定時段和預約設定、資料表結構和門禁
 -- ⚠ 開始放真實資料後就「不要」再執行這個檔案，會把真資料一起清掉
 -- =====================================================================
@@ -26,6 +26,14 @@ begin
   if to_regclass('public.booking_blocks') is not null then
     truncate table public.booking_blocks, public.bind_attempts restart identity;
     truncate table public.customer_accounts, public.bind_codes;
+  end if;
+end $$;
+
+-- 老闆專區：測試時記的支出、刪掉的庫存紀錄（老闆密碼會保留；零件進價會跟著範例零件一起清掉）
+do $$
+begin
+  if to_regclass('public.owner_expenses') is not null then
+    truncate table public.owner_expenses, public.deleted_stock_moves restart identity;
   end if;
 end $$;
 

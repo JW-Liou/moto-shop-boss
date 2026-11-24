@@ -78,6 +78,13 @@
         <label>最晚要幾小時前預約<input type="number" id="sHours" min="0" max="72"></label>
       </div>
       <label style="margin-top:12px">給客人看的說明<textarea id="sNotice" maxlength="300"></textarea></label>
+      <h3>店家資訊（顯示在客人網站）</h3>
+      <div class="form-grid">
+        <label>電話<input id="sPhone" maxlength="30" placeholder="例如 03-555-1234"></label>
+        <label>地址<input id="sAddress" maxlength="100" placeholder="例如 新竹縣竹北市…"></label>
+        <label>營業時間<input id="sShopHours" maxlength="100" placeholder="例如 週一到週六 9:00–19:00，週日公休"></label>
+        <label>Google 地圖連結<input id="sMap" maxlength="300" placeholder="在 Google 地圖按「分享」→ 複製連結"></label>
+      </div>
       <div class="form-actions">
         <button class="btn" onclick="saveSettings()">儲存設定</button>
       </div>
@@ -287,6 +294,10 @@
       $("sDays").value = settings.days_ahead;
       $("sHours").value = settings.min_hours_ahead;
       $("sNotice").value = settings.notice || "";
+      $("sPhone").value = settings.shop_phone || "";
+      $("sAddress").value = settings.shop_address || "";
+      $("sShopHours").value = settings.shop_hours || "";
+      $("sMap").value = settings.map_url || "";
       const site = new URL("customer/", location.href).href;
       $("siteLink").href = site;
       $("siteLink").textContent = site;
@@ -298,8 +309,13 @@
         enabled: $("sEnabled").checked,
         days_ahead: Math.max(1, Math.min(60, Number($("sDays").value) || 14)),
         min_hours_ahead: Math.max(0, Math.min(72, Number($("sHours").value) || 0)),
-        notice: $("sNotice").value.trim() || null
+        notice: $("sNotice").value.trim() || null,
+        shop_phone: $("sPhone").value.trim() || null,
+        shop_address: $("sAddress").value.trim() || null,
+        shop_hours: $("sShopHours").value.trim() || null,
+        map_url: $("sMap").value.trim() || null
       };
+      if (row.map_url && !/^https:\/\//.test(row.map_url)) return toast("地圖連結要是 https:// 開頭的網址", "error");
       const { error } = await db.from("booking_settings").upsert(row);
       if (error) return toast("儲存失敗：" + error.message, "error");
       toast("設定已儲存");

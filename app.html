@@ -173,6 +173,7 @@
         </div>
       </div>
       <a class="low-stock" id="lowStock" href="inventory.html?tab=order" hidden></a>
+      <button class="online-alert" id="onlineAlert" hidden onclick="openOnlineNews()"></button>
 
       <!-- 分頁：待修／維修中／今日完成 -->
       <div class="tabs" id="boardTabs">
@@ -199,6 +200,7 @@
           <span id="apptDayLabel"></span>
           <button class="btn-ghost" onclick="changeApptDay(1)">›</button>
         </div>
+        <div class="overdue" id="apptOverdue" hidden></div>
         <ul class="list compact" id="apptList"></ul>
       </section>
 
@@ -260,6 +262,17 @@
         <label>金額（元）<input type="number" id="eAmount"></label>
         <label>下次保養里程<input type="number" id="eNext"></label>
       </div>
+      <!-- 這張工單扣了哪些庫存零件；改了會自動補扣或加回庫存 -->
+      <div class="use-parts" id="eUseParts" hidden>
+        <div class="use-row">
+          <span class="use-label">扣庫存的零件</span>
+          <select id="eUsePart"></select>
+          <input id="eUseQty" type="number" min="1" value="1" aria-label="數量">
+          <button class="btn-small" onclick="eAddPart()">加入</button>
+        </div>
+        <ul class="use-list" id="eUseList"></ul>
+        <p class="use-note" id="eUseNote">用 − ＋ 改數量、× 拿掉。存檔時庫存會自動補扣或加回差額。</p>
+      </div>
       <div class="form-actions">
         <button class="btn" onclick="saveEdit()">儲存修改</button>
       </div>
@@ -267,6 +280,20 @@
   </div>
 
   
+  <!-- 線上預約的新消息：客人新約的、客人取消的 -->
+  <div class="modal" id="onlineModal" hidden onclick="if (event.target === this) closeOnlineNews()">
+    <div class="modal-box">
+      <div class="modal-head">
+        <h2>線上預約新消息</h2>
+        <button class="btn-small" onclick="closeOnlineNews()">關閉</button>
+      </div>
+      <ul class="list compact" id="onlineNewsList"></ul>
+      <div class="form-actions">
+        <button class="btn" onclick="markOnlineSeen()">知道了</button>
+      </div>
+    </div>
+  </div>
+
   <!-- 今日營收：平常藏起來，按右上角的 ＄ 才會打開 -->
   <div class="modal" id="revenueModal" hidden onclick="if (event.target === this) closeRevenue()">
     <div class="modal-box">
@@ -411,12 +438,14 @@
       loadAppointments();
       loadNotes();
       loadStockParts();
+      loadOnlineNews();
       // 每 1 分鐘自動更新一次（別台電腦或手機新增的資料也會出現）
       setInterval(() => {
         loadDashboard();
         loadAppointments();
         loadNotes();
         loadStockParts();
+        loadOnlineNews();
       }, 60000);      
       // 從車輛總覽按「打開」過來時，自動查詢那台車
       const plate = new URLSearchParams(location.search).get("plate");
@@ -892,6 +921,114 @@
       document.getElementById("eAmount").value = r.total ?? "";
       document.getElementById("eNext").value = r.next_service_km ?? "";
       document.getElementById("editModal").hidden = false;
+      loadEditParts(r.id);
+    }
+
+    // ===== 編輯工單：改用了哪些零件，存檔時自動調整庫存 =====
+    let editUsed = [];        // { part, qty, orig }
+    let editOrigText = "";    // 打開時零件欄裡「庫存零件」那段字
+
+    async function loadEditParts(recordId) {
+      editUsed = [];
+      const box = document.getElementById("eUseParts");
+      box.hidden = !stockParts.length;
+      if (!stockParts.length) return;
+      fillPartSelect(document.getElementById("eUsePart"));
+      const { data } = await db.from("stock_moves")
+        .select("part_id, change").eq("record_id", recordId).eq("reason", "工單使用");
+      const net = new Map();
+      (data || []).forEach(m => net.set(m.part_id, (net.get(m.part_id) || 0) - m.change));
+      net.forEach((qty, id) => {
+        const part = stockParts.find(p => p.id === id);
+        if (part && qty > 0) editUsed.push({ part, qty, orig: qty });
+      });
+      editOrigText = editPartsText();
+      renderEditParts();
+    }
+
+    const editPartsText = () => editUsed.filter(u => u.qty > 0).map(u => `${partLabel(u.part)}×${u.qty}`).join("、");
+
+    function renderEditParts() {
+      const ul = document.getElementById("eUseList");
+      ul.innerHTML = "";
+      editUsed.forEach((u, i) => {
+        if (u.qty <= 0 && !u.orig) return;
+        const li = el("li", u.qty !== u.orig ? "changed" : "");
+        li.append(`${partLabel(u.part)} ×${u.qty}${u.part.unit}` +
+          (u.qty !== u.orig ? `（原本 ${u.orig}）` : ""));
+        const minus = el("button", "btn-icon", "−");
+        minus.title = "少一個";
+        minus.onclick = () => eChangeQty(i, -1);
+        const plus = el("button", "btn-icon", "＋");
+        plus.title = "多一個";
+        plus.onclick = () => eChangeQty(i, 1);
+        const x = el("button", "btn-icon", "×");
+        x.title = "拿掉（庫存會加回去）";
+        x.onclick = () => eChangeQty(i, -u.qty);
+        li.append(minus, plus, x);
+        ul.appendChild(li);
+      });
+      if (!ul.children.length) ul.appendChild(el("li", "empty-chip", "這張工單沒有扣庫存的零件"));
+      // 零件欄裡原本自動寫的那段，跟著更新
+      const field = document.getElementById("eParts");
+      const now = editPartsText();
+      if (editOrigText && field.value.includes(editOrigText)) field.value = field.value.replace(editOrigText, now);
+      else if (!field.value.trim()) field.value = now;
+      editOrigText = now;
+    }
+
+    function eChangeQty(i, delta) {
+      const u = editUsed[i];
+      const next = Math.max(0, u.qty + delta);
+      if (delta > 0 && !confirmStock(u.part, next - u.orig)) return;
+      const amount = document.getElementById("eAmount");
+      if (u.part.price) amount.value = Math.max(0, (Number(amount.value) || 0) + u.part.price * (next - u.qty)) || "";
+      u.qty = next;
+      renderEditParts();
+    }
+
+    // 庫存夠不夠（extra：比原本多用幾個）
+    function confirmStock(p, extra) {
+      if (extra <= 0 || extra <= p.stock) return true;
+      return confirm(`${partLabel(p)} 只剩 ${p.stock}${p.unit}，確定還要多用 ${extra}${p.unit} 嗎？`);
+    }
+
+    function eAddPart() {
+      const id = Number(document.getElementById("eUsePart").value);
+      const qty = Number(document.getElementById("eUseQty").value);
+      const p = stockParts.find(x => x.id === id);
+      if (!p) return alert("請先選零件");
+      if (!Number.isInteger(qty) || qty <= 0) return alert("數量要是大於 0 的整數");
+      // 防呆：零件跟項目對不上
+      const item = itemOfPart(p);
+      const items = document.getElementById("eItems").value;
+      if (item && !items.includes(item) &&
+          !confirm(`「${partLabel(p)}」是「${item}」用的，但這張工單的項目裡沒有「${item}」，確定嗎？`)) return;
+      let u = editUsed.find(x => x.part.id === id);
+      if (!u) { u = { part: p, qty: 0, orig: 0 }; editUsed.push(u); }
+      if (!confirmStock(p, u.qty + qty - u.orig)) return;
+      if (p.price) {
+        const amount = document.getElementById("eAmount");
+        amount.value = (Number(amount.value) || 0) + p.price * qty;
+      }
+      u.qty += qty;
+      document.getElementById("eUsePart").value = "";
+      document.getElementById("eUseQty").value = 1;
+      renderEditParts();
+    }
+
+    // 存檔時：數量有變的，補一筆進出紀錄（多用就扣、少用就加回）
+    async function saveEditParts(recordId) {
+      const rows = editUsed.filter(u => u.qty !== u.orig).map(u => ({
+        part_id: u.part.id, change: -(u.qty - u.orig), reason: "工單使用",
+        record_id: recordId, note: "修改工單"
+      }));
+      if (!rows.length) return;
+      const { error } = await db.from("stock_moves").insert(rows);
+      if (error) return toast("工單改好了，但庫存沒有調整到：" + error.message, "error");
+      toast("庫存已調整：" + editUsed.filter(u => u.qty !== u.orig)
+        .map(u => `${partLabel(u.part)} ${u.qty > u.orig ? "多扣" : "加回"} ${Math.abs(u.qty - u.orig)}`).join("、"), "ok");
+      loadStockParts();
     }
 
     function closeEdit() {
@@ -934,6 +1071,7 @@
         alert("儲存失敗：" + error.message);
         return;
       }
+      await saveEditParts(editingId);
 
       // 里程改得比車輛目前里程還新，就順便更新車輛
       if (km && km > (currentBike.mileage || 0)) {
@@ -988,9 +1126,19 @@
 
       const ul = document.getElementById("apptList");
       ul.innerHTML = "";
+      loadOverdue();
       if (data.length === 0) {
         ul.appendChild(el("li", "empty", "這天沒有預約"));
         return;
+      }
+
+      // 這些車以前「沒來」過幾次
+      const plates = [...new Set(data.map(a => a.plate).filter(Boolean))];
+      const noShow = {};
+      if (plates.length) {
+        const { data: ns } = await db.from("appointments").select("plate")
+          .in("plate", plates).eq("status", "沒來");
+        (ns || []).forEach(x => (noShow[x.plate] = (noShow[x.plate] || 0) + 1));
       }
 
       data.forEach(a => {
@@ -1007,6 +1155,7 @@
         // 客人在網站上自己約的、小助理幫忙建的，加個小標籤
         if (a.source === "線上") first.appendChild(el("span", "src-tag online", "線上"));
         if (a.source === "小助理") first.appendChild(el("span", "src-tag ai", "小助理"));
+        if (noShow[a.plate]) first.appendChild(el("span", "src-tag noshow", `沒來過 ${noShow[a.plate]} 次`));
         main.append(first, sub);
         if (a.phone) {
           main.classList.add("reveal");
@@ -1017,13 +1166,20 @@
         }
         li.appendChild(main);
 
-        // 還在預約中的，才有「到店」和「取消」按鈕
+        // 還在預約中的，才有「到店」「取消」；當天或已經過了的，多一個「沒來」
         if (a.status === "預約中") {
           const arriveBtn = el("button", "btn-small", "到店");
           arriveBtn.onclick = () => arriveAppt(a);
+          li.appendChild(arriveBtn);
+          if (a.date <= today()) {
+            const noBtn = el("button", "btn-small btn-plain", "沒來");
+            noBtn.title = "客人沒有出現（會記下來，沒來太多次就不能線上預約）";
+            noBtn.onclick = () => noShowAppt(a);
+            li.appendChild(noBtn);
+          }
           const cancelBtn = el("button", "btn-small btn-danger", "取消");
           cancelBtn.onclick = () => cancelAppt(a.id);
-          li.append(arriveBtn, cancelBtn);
+          li.appendChild(cancelBtn);
         }
         ul.appendChild(li);
       });
@@ -1067,6 +1223,14 @@
           .eq("date", date)
           .eq("status", "預約中");
         if (same && same.length) warnings.push(`${plate} 在 ${date} 已經有預約了，是不是重複新增？`);
+      }
+      // 跟線上預約的時段名額比一下（還沒啟用線上預約就跳過）
+      const time = document.getElementById("aTime").value;
+      if (time) {
+        const { data: slots } = await db.rpc("available_slots", { p_from: date, p_days: 1 });
+        const slot = (slots || []).find(x => x.slot_time.slice(0, 5) === time);
+        if (slot && slot.closed) warnings.push(`${time} 這個時段已經關閉（線上預約設定裡關掉的），確定還要排嗎？`);
+        else if (slot && slot.remaining <= 0) warnings.push(`${time} 已經約了 ${slot.booked} 台（名額 ${slot.capacity} 台），確定還要再排嗎？`);
       }
       if (!confirmChecks([], warnings)) return;
 
@@ -1157,6 +1321,103 @@
         .map(a => `${a.date.slice(5).replace("-", "/")} ${a.time ? a.time.slice(0, 5) : ""} ${a.items || ""}`.trim())
         .join("、");
       box.hidden = false;
+    }
+
+    // 客人沒來
+    async function noShowAppt(a) {
+      if (!confirm(`${a.name || a.plate || "這位客人"} 沒有來，要記成「沒來」嗎？`)) return;
+      const { error } = await db.from("appointments").update({ status: "沒來" }).eq("id", a.id);
+      if (error) return alert("更新失敗：" + error.message);
+      loadAppointments();
+    }
+
+    // 過期還沒處理的預約（日期已經過了，還是「預約中」）
+    async function loadOverdue() {
+      const box = document.getElementById("apptOverdue");
+      const { data, error } = await db.from("appointments").select("id")
+        .eq("status", "預約中").lt("date", today());
+      if (error || !data || !data.length) { box.hidden = true; return; }
+      box.innerHTML = "";
+      box.append(`有 ${data.length} 筆過期的預約還沒處理（日期過了、還是預約中）`);
+      const btn = el("button", "btn-small btn-plain", "全部記成沒來");
+      btn.onclick = async () => {
+        if (!confirm(`把這 ${data.length} 筆過期的預約都記成「沒來」嗎？\n\n有來但忘了按「到店」的，請先到那天按「到店」再按這裡。`)) return;
+        const { error } = await db.from("appointments").update({ status: "沒來" })
+          .eq("status", "預約中").lt("date", today());
+        if (error) return alert("更新失敗：" + error.message);
+        toast(`已把 ${data.length} 筆記成沒來`, "ok");
+        loadAppointments();
+      };
+      box.appendChild(btn);
+      box.hidden = false;
+    }
+
+    // ===== 線上預約新消息：客人新約了、客人取消了 =====
+    let onlineNews = [];
+    let onlineCount = -1;   // 上次看到幾筆（變多了才提醒）
+
+    async function loadOnlineNews() {
+      const { data, error } = await db.from("appointments")
+        .select("id, date, time, name, plate, items, status, created_at")
+        .eq("source", "線上").is("seen_at", null)
+        .order("date").order("time", { nullsFirst: false });
+      const btn = document.getElementById("onlineAlert");
+      if (error) { btn.hidden = true; return; }   // 還沒執行新版 SQL
+      onlineNews = data;
+      btn.hidden = data.length === 0;
+      btn.textContent = `🔔 ${data.length} 筆線上預約新消息 ›`;
+      if (onlineCount >= 0 && data.length > onlineCount) {
+        toast("有新的線上預約消息", "ok");
+        beep();
+      }
+      onlineCount = data.length;
+    }
+
+    // 「叮」一聲（瀏覽器不允許就算了）
+    function beep() {
+      try {
+        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        const o = ctx.createOscillator(), g = ctx.createGain();
+        o.frequency.value = 880;
+        g.gain.setValueAtTime(0.15, ctx.currentTime);
+        g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.6);
+        o.connect(g); g.connect(ctx.destination);
+        o.start(); o.stop(ctx.currentTime + 0.6);
+      } catch (e) { /* 沒聲音也沒關係 */ }
+    }
+
+    function openOnlineNews() {
+      const ul = document.getElementById("onlineNewsList");
+      ul.innerHTML = "";
+      onlineNews.forEach(a => {
+        const li = el("li");
+        const main = el("div", "main");
+        const kind = a.status === "取消" ? "客人取消" : "新預約";
+        const first = el("div", "", `${a.date.slice(5).replace("-", "/")} ${(a.time || "").slice(0, 5)}　${a.name || ""}　${a.items || ""}`);
+        first.prepend(el("span", "src-tag " + (a.status === "取消" ? "noshow" : "online"), kind));
+        main.append(first, el("div", "sub", a.plate || ""));
+        main.classList.add("reveal");
+        main.title = "跳到那一天的預約";
+        main.onclick = () => { apptDay = a.date; loadAppointments(); closeOnlineNews(); };
+        li.appendChild(main);
+        ul.appendChild(li);
+      });
+      document.getElementById("onlineModal").hidden = false;
+    }
+
+    function closeOnlineNews() {
+      document.getElementById("onlineModal").hidden = true;
+    }
+
+    async function markOnlineSeen() {
+      const ids = onlineNews.map(a => a.id);
+      if (ids.length) {
+        const { error } = await db.from("appointments").update({ seen_at: new Date().toISOString() }).in("id", ids);
+        if (error) return alert("更新失敗：" + error.message);
+      }
+      closeOnlineNews();
+      onlineCount = 0;
+      loadOnlineNews();
     }
 
     async function cancelAppt(id) {
@@ -1298,6 +1559,27 @@
         usedParts.some(u => (u.temp ? u.name.includes(item) : u.item === item));
     }
 
+    // 零件下拉選單：依分類分組（選的值保留，避免每分鐘重新整理時被清掉）
+    function fillPartSelect(sel) {
+      const keep = sel.value;
+      sel.innerHTML = "";
+      const first = el("option", "", "選零件…");
+      first.value = "";
+      sel.appendChild(first);
+      const groups = {};
+      stockParts.filter(p => p.active).forEach(p => {
+        if (!groups[p.category]) {
+          groups[p.category] = document.createElement("optgroup");
+          groups[p.category].label = p.category;
+          sel.appendChild(groups[p.category]);
+        }
+        const o = el("option", "", `${partLabel(p)}（剩 ${p.stock}${p.unit}）`);
+        o.value = p.id;
+        groups[p.category].appendChild(o);
+      });
+      sel.value = keep;
+    }
+
     async function loadStockParts() {
       const { data, error } = await db.from("parts")
         .select("id, name, spec, category, unit, stock, safety_stock, price, active")
@@ -1311,25 +1593,7 @@
       stockParts = data;
       document.getElementById("useParts").hidden = data.length === 0;
 
-      // 下拉選單依分類分組（選的值保留，避免每分鐘重新整理時被清掉）
-      const sel = document.getElementById("usePart");
-      const keep = sel.value;
-      sel.innerHTML = "";
-      const first = el("option", "", "選零件…");
-      first.value = "";
-      sel.appendChild(first);
-      const groups = {};
-      data.filter(p => p.active).forEach(p => {
-        if (!groups[p.category]) {
-          groups[p.category] = document.createElement("optgroup");
-          groups[p.category].label = p.category;
-          sel.appendChild(groups[p.category]);
-        }
-        const o = el("option", "", `${partLabel(p)}（剩 ${p.stock}${p.unit}）`);
-        o.value = p.id;
-        groups[p.category].appendChild(o);
-      });
-      sel.value = keep;
+      fillPartSelect(document.getElementById("usePart"));
 
       // 工作看板上的「要叫貨」提醒
       const low = data.filter(p => p.active && p.safety_stock > 0 && p.stock <= p.safety_stock).length;
@@ -1360,6 +1624,7 @@
         .select("part_id, record_id, created_at")
         .in("record_id", recordIds.slice(0, 200))
         .eq("reason", "工單使用")
+        .lt("change", 0)
         .order("created_at", { ascending: false })
         .limit(300);
       if (error || !data) return;

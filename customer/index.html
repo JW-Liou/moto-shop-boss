@@ -82,6 +82,9 @@
     .summary { background: #f8fafc; border: 1px dashed #93c5fd; border-radius: 12px; padding: 10px 12px; margin: 14px 0 10px; }
     .done { text-align: center; padding: 10px 0; }
     .done .big { font-size: 44px; }
+    .shop h2 { font-size: 16px; }
+    .shop-row { margin: 6px 0; font-size: 15px; }
+    .shop-row a { color: var(--blue); font-weight: 600; text-decoration: none; }
     footer { text-align: center; color: var(--muted); font-size: 12.5px; padding: 0 16px 30px; }
   </style>
 </head>
@@ -156,6 +159,11 @@
 
       <div id="tab-records" hidden></div>
     </div>
+    <!-- 店家資訊（老闆在「線上預約」頁設定） -->
+    <section class="card shop" id="shopCard" hidden>
+      <h2>竹北榮詮機車行</h2>
+      <div id="shopInfo"></div>
+    </section>
   </main>
   <footer>竹北榮詮機車行</footer>
 
@@ -201,6 +209,31 @@
     function show(view) {
       ["loading", "loginView", "bindView", "mainView"].forEach(v => $(v).hidden = v !== view);
       $("logoutBtn").hidden = view === "loginView" || view === "loading";
+      // 店家資訊放在最下面
+      $("shopCard").hidden = !$("shopInfo").children.length || view === "loading";
+    }
+
+    // 店家電話、地址、營業時間（沒登入也看得到）
+    async function loadShop() {
+      const { data } = await db.rpc("shop_info");
+      const box = $("shopInfo");
+      box.innerHTML = "";
+      if (!data) return;
+      const row = (icon, node) => { const p = el("p", "shop-row"); p.append(icon + "　", node); box.appendChild(p); };
+      if (data.phone) {
+        const a = el("a", "", data.phone);
+        a.href = "tel:" + data.phone.replace(/[^0-9+]/g, "");
+        row("📞", a);
+      }
+      if (data.address) {
+        const a = el("a", "", data.address);
+        a.href = /^https:\/\//.test(data.map_url || "") ? data.map_url
+          : "https://www.google.com/maps/search/?api=1&query=" + encodeURIComponent(data.address);
+        a.target = "_blank"; a.rel = "noopener";
+        row("📍", a);
+      }
+      if (data.hours) row("🕘", document.createTextNode(data.hours));
+      $("shopCard").hidden = !box.children.length || !$("loading").hidden;
     }
 
     // ===== 啟動 =====
@@ -500,6 +533,7 @@
       loadSlots();
     }
 
+    loadShop();
     start();
   </script>
 </body>

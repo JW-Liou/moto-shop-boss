@@ -194,7 +194,14 @@
           ${field("金額（元）", "total", a.total, "number")}
           ${field("里程（公里）", "mileage", a.mileage, "number")}
           <label>狀態<select name="status">${st}</select></label>
+        </div>
+        <div class="ai-parts" hidden>
+          <div class="ai-parts-head">扣庫存的零件
+            <button type="button" class="link-btn" data-act="addpart">＋零件</button></div>
+          <div class="ai-parts-rows"></div>
+          <label class="ai-nostock"><input type="checkbox" name="nostock"> 這張不扣庫存（客人自備、代工、臨時零件）</label>
         </div>`;
+      setupPartRows(card, a.parts || "");
     }
     card.insertAdjacentHTML("beforeend", `
       <p class="ai-result"></p>
@@ -210,6 +217,7 @@
       btn.disabled = true;
       out.textContent = "存檔中…";
       const f = Object.fromEntries(new FormData(card));
+      if (p.type === "work_order") f.useParts = readPartRows(card);
       try {
         const done = p.type === "appointment" ? await saveAppointment(f) : await saveWorkOrder(f);
         out.textContent = "✅ " + done;
@@ -224,6 +232,71 @@
     };
     body.appendChild(card);
     body.scrollTop = body.scrollHeight;
+  }
+
+  // ----- 工單的「扣庫存零件」：從小助理寫的零件文字猜是哪一個，讓人確認 -----
+  let partsCache = null;
+  async function getParts() {
+    if (partsCache) return partsCache;
+    const { data, error } = await db.from("parts")
+      .select("id, name, spec, category, unit, stock, price, active").eq("active", true)
+      .order("category").order("name");
+    partsCache = error ? [] : data;   // 還沒啟用庫存就是空的
+    setTimeout(() => (partsCache = null), 60000);
+    return partsCache;
+  }
+  const label = p => [p.name, p.spec].filter(Boolean).join(" ");
+  const flat = s => (s || "").toLowerCase().replace(/[\s\-_/]/g, "");
+
+  // 「機油 半合成 10W-30 0.8L ×1、齒輪油」→ [{ part, qty }]；猜不出是哪一罐的，part 留空讓人選
+  function guessParts(text, parts) {
+    const out = [];
+    text.split(/[、,，;；\n]+/).map(t => t.trim()).filter(Boolean).forEach(seg => {
+      const qm = seg.match(/[x×*]\s*(\d+)/i) || seg.match(/(\d+)\s*(瓶|個|顆|條|組|罐)/);
+      const qty = qm ? Number(qm[1]) : 1;
+      const same = parts.filter(p => seg.includes(p.name));
+      if (!same.length) return;
+      const exact = same.filter(p => p.spec && flat(seg).includes(flat(p.spec)));
+      const pick = exact.length === 1 ? exact[0] : same.length === 1 ? same[0] : null;
+      out.push({ part: pick, qty, name: same[0].name });
+    });
+    return out;
+  }
+
+  function partRow(parts, guess) {
+    const row = document.createElement("div");
+    row.className = "ai-part-row";
+    const sel = document.createElement("select");
+    sel.innerHTML = `<option value="">${guess && guess.name ? `「${guess.name}」是哪一個？` : "選零件…"}</option>` +
+      parts.map(p => `<option value="${p.id}">${label(p)}（剩 ${p.stock}${p.unit}）</option>`).join("");
+    if (guess && guess.part) sel.value = guess.part.id;
+    const qty = document.createElement("input");
+    qty.type = "number"; qty.min = 1; qty.value = (guess && guess.qty) || 1;
+    const x = document.createElement("button");
+    x.type = "button"; x.className = "btn-icon"; x.textContent = "×"; x.title = "拿掉";
+    x.onclick = () => row.remove();
+    row.append(sel, qty, x);
+    return row;
+  }
+
+  async function setupPartRows(card, text) {
+    const parts = await getParts();
+    if (!parts.length) return;
+    const box = card.querySelector(".ai-parts");
+    const rows = card.querySelector(".ai-parts-rows");
+    box.hidden = false;
+    guessParts(text, parts).forEach(g => rows.appendChild(partRow(parts, g)));
+    if (!rows.children.length && text.trim()) rows.appendChild(partRow(parts, null));
+    card.querySelector('[data-act="addpart"]').onclick = () => rows.appendChild(partRow(parts, null));
+  }
+
+  function readPartRows(card) {
+    if (card.querySelector('[name="nostock"]')?.checked) return [];
+    return [...card.querySelectorAll(".ai-part-row")].map(r => ({
+      id: Number(r.querySelector("select").value),
+      qty: Number(r.querySelector("input").value),
+      ask: r.querySelector("select option").textContent
+    }));
   }
 
   const plateOf = s => (s || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
@@ -268,6 +341,17 @@
     if (!(f.items || "").trim()) throw new Error("請填項目");
     const bike = await findBike(plate);
     if (!bike) throw new Error(`${plate} 還沒建檔，請先在工作看板的「車牌查詢」建檔`);
+    // 扣庫存的零件：每一列都要選好、數量要對
+    const use = (f.useParts || []);
+    const parts = use.length ? await getParts() : [];
+    for (const u of use) {
+      if (!u.id) throw new Error(`請選好${u.ask.startsWith("「") ? u.ask.replace("？", "") : "零件"}，用不到就按 × 拿掉，或勾「這張不扣庫存」`);
+      if (!Number.isInteger(u.qty) || u.qty <= 0) throw new Error("零件數量要是大於 0 的整數");
+      const p = parts.find(x => x.id === u.id);
+      if (p && u.qty > p.stock && !confirm(`${label(p)} 只剩 ${p.stock}${p.unit}，確定要用 ${u.qty}${p.unit} 嗎？`)) {
+        throw new Error("已取消，請修改數量");
+      }
+    }
     const km = f.mileage ? Number(f.mileage) : null;
     // 里程怪怪的先問一下（AI 可能聽錯數字）
     if (km && km > 300000) throw new Error(`里程 ${km.toLocaleString()} 公里不太合理，請改一下`);
@@ -275,7 +359,7 @@
         !confirm(`里程 ${km.toLocaleString()} 比這台車上次登記的 ${bike.mileage.toLocaleString()} 還少，確定嗎？`)) {
       throw new Error("已取消，請修改里程");
     }
-    const { error } = await db.from("service_records").insert({
+    const { data: saved, error } = await db.from("service_records").insert({
       bike_id: bike.id,
       date: todayStr(),
       mileage: km,
@@ -284,12 +368,22 @@
       total: Number(f.total) || 0,
       status: f.status || "待修",
       completed_at: f.status === "已完成" ? new Date().toISOString() : null
-    });
+    }).select("id").single();
     if (error) throw new Error("新增工單失敗：" + error.message);
+    let stockNote = "";
+    if (use.length) {
+      const { error: e2 } = await db.from("stock_moves").insert(use.map(u => ({
+        part_id: u.id, change: -u.qty, reason: "工單使用", record_id: saved.id
+      })));
+      stockNote = e2 ? "（但庫存沒有扣到：" + e2.message + "）"
+        : "，已扣庫存：" + use.map(u => { const p = parts.find(x => x.id === u.id); return `${p ? label(p) : "零件"}×${u.qty}`; }).join("、");
+      partsCache = null;
+      if (typeof loadStockParts === "function") loadStockParts();
+    }
     if (km && km > (bike.mileage || 0)) {
       await db.from("bikes").update({ mileage: km }).eq("id", bike.id);
     }
     if (typeof loadDashboard === "function") loadDashboard();
-    return `已新增工單 ${plate}：${f.items.trim()}`;
+    return `已新增工單 ${plate}：${f.items.trim()}${stockNote}`;
   }
 })();

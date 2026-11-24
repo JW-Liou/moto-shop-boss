@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>老闆專區 - 竹北榮詮管理系統</title>
+  <meta name="robots" content="noindex">
+  <meta name="theme-color" content="#0b1120">
+  <link rel="icon" href="icon-192.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&display=swap">
+  <link rel="stylesheet" href="style.css">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+  <script src="config.js"></script>
+</head>
+<body class="owner-page">
+  <header class="topbar">
+    <a class="brand" href="app.html">竹北榮詮<span>老闆專區</span></a>
+    <div class="user">
+      <button class="btn-ghost" onclick="location.href='app.html'">回主畫面</button>
+      <button class="btn-ghost" id="lockBtn" hidden onclick="lock()">🔒 上鎖</button>
+    </div>
+  </header>
+
+  <main class="container wide">
+    <!-- 上鎖畫面 -->
+    <section class="card owner-lock" id="lockView">
+      <div class="lock-icon">🔒</div>
+      <h2>老闆專區</h2>
+      <p class="info">進價、成本、毛利只有老闆看得到。請輸入老闆密碼。</p>
+      <form onsubmit="event.preventDefault(); unlock()">
+        <input type="password" id="pin" autocomplete="current-password" placeholder="老闆密碼">
+        <button class="btn" type="submit">開鎖</button>
+      </form>
+      <p class="msg" id="lockMsg"></p>
+    </section>
+
+    <div id="ownerView" hidden>
+      <section class="card">
+        <div class="card-head">
+          <h2>毛利報表</h2>
+          <label class="month-pick">月份 <input type="month" id="month" onchange="loadReport()"></label>
+        </div>
+        <div class="kpis" id="kpis"></div>
+        <p class="owner-warn" id="warn" hidden></p>
+        <h3>最近 12 個月</h3>
+        <div class="trend" id="trend"></div>
+        <div class="trend-legend"><span class="l-rev">營收</span><span class="l-profit">毛利</span></div>
+      </section>
+
+      <div class="tabs" id="ownerTabs">
+        <button data-tab="parts" class="active">零件毛利</button>
+        <button data-tab="costs">進價設定</button>
+        <button data-tab="expenses">其他支出</button>
+        <button data-tab="settings">設定</button>
+      </div>
+
+      <!-- 這個月每個零件賺多少 -->
+      <section class="card tab-panel" id="panel-parts">
+        <h2>這個月零件賺多少</h2>
+        <p class="info">已完成的工單用掉的零件。售價用目前的售價估算，進價用「用掉那時候」的進價。</p>
+        <div class="table-wrap"><table class="usage-table" id="partsTable"></table></div>
+      </section>
+
+      <!-- 進價設定 -->
+      <section class="card tab-panel" id="panel-costs" hidden>
+        <div class="card-head">
+          <h2>進價設定</h2>
+          <label class="check"><input type="checkbox" id="backfill" checked> 也補到以前沒填進價時用掉的</label>
+        </div>
+        <p class="info">填每個零件「跟廠商買的價格」（一個的價錢）。改進價不會影響以前的毛利，只影響之後用掉的。</p>
+        <input id="costSearch" placeholder="搜尋零件" oninput="renderCosts()">
+        <div class="table-wrap"><table class="usage-table" id="costTable"></table></div>
+      </section>
+
+      <!-- 其他支出 -->
+      <section class="card tab-panel" id="panel-expenses" hidden>
+        <h2>其他支出</h2>
+        <p class="info">代工費、房租、水電、薪資、工具…這些會從毛利扣掉，算出「這個月實際賺多少」。</p>
+        <div class="form-grid">
+          <label>日期<input type="date" id="exDate"></label>
+          <label>類別
+            <select id="exCat">
+              <option>代工</option><option>臨時零件</option><option>房租</option><option>水電</option>
+              <option>薪資</option><option>工具設備</option><option>雜支</option><option>其他</option>
+            </select>
+          </label>
+          <label>項目<input id="exItem" maxlength="60" placeholder="例如：烤漆外包"></label>
+          <label>金額（元）<input type="number" id="exAmount" min="0"></label>
+        </div>
+        <div class="form-actions"><button class="btn" onclick="addExpense()">新增支出</button></div>
+        <ul class="list compact" id="exList"></ul>
+      </section>
+
+      <!-- 設定 -->
+      <section class="card tab-panel" id="panel-settings" hidden>
+        <h2>設定</h2>
+        <h3>匯出</h3>
+        <p class="info">把這個月的報表、零件毛利、其他支出存成 Excel。<b>這些資料不在每日自動備份裡</b>，建議每個月匯出一次自己留著。</p>
+        <button class="btn" onclick="exportExcel()">匯出這個月的 Excel</button>
+        <h3>更換老闆密碼</h3>
+        <div class="form-grid">
+          <label>舊密碼<input type="password" id="oldPin" autocomplete="current-password"></label>
+          <label>新密碼（6 個字以上）<input type="password" id="newPin" autocomplete="new-password"></label>
+          <label>再輸入一次<input type="password" id="newPin2" autocomplete="new-password"></label>
+        </div>
+        <div class="form-actions"><button class="btn" onclick="changePin()">更換密碼</button></div>
+        <p class="info">離開電腦前記得按右上角「上鎖」。10 分鐘沒動作也會自動上鎖。</p>
+      </section>
+    </div>
+  </main>
+
+  <script>
+    const $ = id => document.getElementById(id);
+    function el(tag, className, text) {
+      const e = document.createElement(tag);
+      if (className) e.className = className;
+      if (text !== undefined) e.textContent = text;
+      return e;
+    }
+    function toast(message, type = "ok") {
+      let box = $("toastBox");
+      if (!box) { box = el("div"); box.id = "toastBox"; document.body.appendChild(box); }
+      const t = el("div", "toast " + type, message);
+      box.appendChild(t);
+      setTimeout(() => t.remove(), 4000);
+    }
+    const money = n => "$" + Math.round(Number(n) || 0).toLocaleString();
+    const pct = (a, b) => b ? (Math.round(a / b * 1000) / 10) + "%" : "-";
+    const partName = p => [p.name, p.spec].filter(Boolean).join(" ");
+
+    // ===== 開鎖、上鎖 =====
+    // 通行碼只放在這個分頁裡（關掉分頁就沒了），10 分鐘沒動作自動上鎖
+    const KEY = "owner-token";
+    const IDLE = 10 * 60 * 1000;
+    let token = null, idleTimer = null;
+    try { token = sessionStorage.getItem(KEY); } catch (e) { token = null; }
+
+    function touch() {
+      clearTimeout(idleTimer);
+      idleTimer = setTimeout(() => lock("10 分鐘沒動作，已自動上鎖"), IDLE);
+    }
+    ["click", "keydown", "scroll"].forEach(ev => document.addEventListener(ev, () => token && touch(), { passive: true }));
+
+    async function unlock() {
+      $("lockMsg").textContent = "";
+      const pin = $("pin").value;
+      if (!pin) return ($("lockMsg").textContent = "請輸入老闆密碼");
+      const { data, error } = await db.rpc("owner_unlock", { p_pin: pin });
+      $("pin").value = "";
+      if (error) return ($("lockMsg").textContent = friendly(error));
+      if (!data) return ($("lockMsg").textContent = "老闆密碼不對（錯 5 次會鎖 15 分鐘）");
+      token = data;
+      try { sessionStorage.setItem(KEY, token); } catch (e) { /* 存不了就算了 */ }
+      showOwner();
+    }
+
+    async function lock(message) {
+      if (token) await db.rpc("owner_lock", { p_token: token });
+      token = null;
+      try { sessionStorage.removeItem(KEY); } catch (e) { /* 無所謂 */ }
+      clearTimeout(idleTimer);
+      $("ownerView").hidden = true;
+      $("lockBtn").hidden = true;
+      $("lockView").hidden = false;
+      // 把畫面上的數字清掉，避免別人看到
+      ["kpis", "trend", "partsTable", "costTable", "exList"].forEach(id => ($(id).innerHTML = ""));
+      $("lockMsg").textContent = typeof message === "string" ? message : "";
+    }
+
+    function friendly(error) {
+      const m = error.message || String(error);
+      if (/owner_|schema cache|does not exist/i.test(m) && !/[一-鿿]/.test(m)) {
+        return "老闆專區還沒啟用：請先在 Supabase 執行「老闆版_老闆專區與改進.sql」。";
+      }
+      return m;
+    }
+
+    // 呼叫老闆功能；通行碼過期就回到上鎖畫面
+    async function call(fn, args = {}) {
+      const { data, error } = await db.rpc(fn, { p_token: token, ...args });
+      if (error) {
+        if (/已上鎖|沒有權限/.test(error.message)) { lock(error.message); throw error; }
+        toast(friendly(error), "error");
+        throw error;
+      }
+      return data;
+    }
+
+    function showOwner() {
+      $("lockView").hidden = true;
+      $("ownerView").hidden = false;
+      $("lockBtn").hidden = false;
+      touch();
+      loadReport();
+      loadCosts();
+    }
+
+    // ===== 分頁 =====
+    $("ownerTabs").addEventListener("click", e => {
+      const b = e.target.closest("button");
+      if (!b) return;
+      document.querySelectorAll("#ownerTabs button").forEach(x => x.classList.toggle("active", x === b));
+      document.querySelectorAll(".tab-panel").forEach(p => (p.hidden = p.id !== "panel-" + b.dataset.tab));
+    });
+
+    // ===== 報表 =====
+    let report = null;
+    async function loadReport() {
+      const m = $("month").value;
+      try {
+        report = await call("owner_report", { p_month: m ? m + "-01" : null });
+      } catch (e) { return; }
+      const t = report.trend.find(x => x.month === report.month) || { revenue: 0, parts_cost: 0, expenses: 0 };
+      const gross = t.revenue - t.parts_cost;
+      const net = gross - t.expenses;
+
+      const kpis = $("kpis");
+      kpis.innerHTML = "";
+      [
+        ["營收", money(t.revenue), "已完成的工單"],
+        ["零件成本", money(t.parts_cost), "用掉的零件 × 進價"],
+        ["零件毛利", money(gross), "毛利率 " + pct(gross, t.revenue)],
+        ["其他支出", money(t.expenses), "代工、房租、水電…"],
+        ["實際賺", money(net), "淨利率 " + pct(net, t.revenue)],
+        ["庫存價值", money(report.stock_value), "現在倉庫裡的零件 × 進價"]
+      ].forEach(([label, value, sub], i) => {
+        const k = el("div", "kpi" + (i === 4 ? (net >= 0 ? " good" : " bad") : ""));
+        k.append(el("div", "kpi-label", label), el("div", "kpi-value", value), el("div", "kpi-sub", sub));
+        kpis.appendChild(k);
+      });
+
+      const w = [];
+      if (report.missing_cost) w.push(`這個月有 ${report.missing_cost} 種用掉的零件還沒填進價，零件成本會算得比較少`);
+      if (report.stock_no_cost) w.push(`還有 ${report.stock_no_cost} 種有庫存的零件沒填進價`);
+      $("warn").hidden = !w.length;
+      $("warn").textContent = w.length ? "⚠ " + w.join("；") + "。請到「進價設定」補上。" : "";
+
+      renderTrend();
+      renderPartsProfit();
+      renderExpenses();
+    }
+
+    // 12 個月的長條圖（營收、毛利）
+    function renderTrend() {
+      const box = $("trend");
+      box.innerHTML = "";
+      const max = Math.max(1, ...report.trend.map(t => t.revenue));
+      report.trend.forEach(t => {
+        const profit = t.revenue - t.parts_cost - t.expenses;
+        const col = el("div", "trend-col" + (t.month === report.month ? " now" : ""));
+        col.title = `${t.month}\n營收 ${money(t.revenue)}\n零件成本 ${money(t.parts_cost)}\n其他支出 ${money(t.expenses)}\n實際賺 ${money(profit)}`;
+        const bars = el("div", "trend-bars");
+        const r = el("div", "bar rev"); r.style.height = (t.revenue / max * 100) + "%";
+        const p = el("div", "bar profit"); p.style.height = (Math.max(0, profit) / max * 100) + "%";
+        bars.append(r, p);
+        col.append(bars, el("div", "trend-label", Number(t.month.slice(5)) + "月"));
+        col.onclick = () => { $("month").value = t.month; loadReport(); };
+        box.appendChild(col);
+      });
+    }
+
+    function renderPartsProfit() {
+      const table = $("partsTable");
+      table.innerHTML = "";
+      const head = table.insertRow();
+      ["零件", "用量", "售價", "進價", "每個賺", "毛利率", "這個月賺"].forEach(h => {
+        const th = document.createElement("th"); th.textContent = h; head.appendChild(th);
+      });
+      if (!report.parts.length) {
+        const td = table.insertRow().insertCell();
+        td.colSpan = 7; td.textContent = "這個月還沒有用掉零件的已完成工單";
+        return;
+      }
+      report.parts.forEach(p => {
+        const tr = table.insertRow();
+        const each = p.cost != null ? p.price - p.cost : null;
+        [partName(p), `${p.qty}${p.unit}`, money(p.price), p.cost != null ? money(p.cost) : "未填",
+         each != null ? money(each) : "-", each != null ? pct(each, p.price) : "-",
+         p.profit != null ? money(p.profit) + (p.no_cost ? `（${p.no_cost} 筆沒進價）` : "") : "-"]
+          .forEach((t, i) => {
+            const td = tr.insertCell(); td.textContent = t;
+            if (i === 0) td.className = "name";
+            if (i === 3 && p.cost == null) td.className = "warn";
+            if (i === 4 && each != null && each <= 0) td.className = "warn";
+          });
+      });
+    }
+
+    // ===== 進價設定 =====
+    let costParts = [];
+    async function loadCosts() {
+      try { costParts = await call("owner_parts"); } catch (e) { return; }
+      renderCosts();
+    }
+
+    function renderCosts() {
+      const q = $("costSearch").value.trim();
+      const table = $("costTable");
+      table.innerHTML = "";
+      const head = table.insertRow();
+      ["零件", "庫存", "售價", "進價", "每個賺", "毛利率", ""].forEach(h => {
+        const th = document.createElement("th"); th.textContent = h; head.appendChild(th);
+      });
+      costParts.filter(p => !q || partName(p).includes(q) || p.category.includes(q)).forEach(p => {
+        const tr = table.insertRow();
+        const name = tr.insertCell(); name.className = "name";
+        name.textContent = partName(p) + (p.active ? "" : "（停用）");
+        tr.insertCell().textContent = `${p.stock}${p.unit}`;
+        tr.insertCell().textContent = money(p.price);
+        const costCell = tr.insertCell();
+        const input = el("input");
+        input.type = "number"; input.min = 0; input.step = "1"; input.className = "cost-input";
+        input.value = p.cost ?? "";
+        input.placeholder = "未填";
+        costCell.appendChild(input);
+        const each = tr.insertCell(), rate = tr.insertCell();
+        const show = () => {
+          const c = input.value === "" ? null : Number(input.value);
+          each.textContent = c == null ? "-" : money(p.price - c);
+          rate.textContent = c == null ? "-" : pct(p.price - c, p.price);
+          each.className = c != null && c >= p.price ? "warn" : "";
+        };
+        show();
+        input.oninput = show;
+        const btnCell = tr.insertCell();
+        const save = el("button", "btn-small", "儲存");
+        save.onclick = () => saveCost(p, input.value);
+        input.onkeydown = e => { if (e.key === "Enter") saveCost(p, input.value); };
+        btnCell.appendChild(save);
+      });
+    }
+
+    async function saveCost(p, value) {
+      const cost = value === "" ? null : Number(value);
+      if (cost != null && (!(cost >= 0) || cost > 1000000)) return toast("進價不合理", "error");
+      if (cost != null && cost >= p.price &&
+          !confirm(`${partName(p)} 進價 ${money(cost)} 比售價 ${money(p.price)} 還高（或一樣），每用一個就虧錢，確定嗎？`)) return;
+      let n;
+      try {
+        n = await call("owner_set_cost", { p_part_id: p.id, p_cost: cost, p_backfill: $("backfill").checked });
+      } catch (e) { return; }
+      p.cost = cost;
+      toast(cost == null ? `${partName(p)} 進價已清除` : `${partName(p)} 進價 ${money(cost)} 已儲存` + (n ? `，補到以前 ${n} 筆用量` : ""));
+      loadReport();
+    }
+
+    // ===== 其他支出 =====
+    function renderExpenses() {
+      const ul = $("exList");
+      ul.innerHTML = "";
+      if (!report.expenses.length) return ul.appendChild(el("li", "empty", `${report.month.replace("-", "/")} 還沒有記其他支出`));
+      report.expenses.forEach(x => {
+        const li = el("li");
+        const main = el("div", "main");
+        main.append(el("div", "", `${x.category}　${x.item || ""}`), el("div", "sub", x.date));
+        const del = el("button", "btn-small btn-danger", "刪除");
+        del.onclick = async () => {
+          if (!confirm(`刪除「${x.category} ${x.item || ""} ${money(x.amount)}」嗎？`)) return;
+          try { await call("owner_expense_delete", { p_id: x.id }); } catch (e) { return; }
+          loadReport();
+        };
+        li.append(main, el("b", "money", money(x.amount)), del);
+        ul.appendChild(li);
+      });
+    }
+
+    async function addExpense() {
+      const date = $("exDate").value, amount = Number($("exAmount").value);
+      if (!date) return toast("請選日期", "error");
+      if (!$("exAmount").value || !(amount >= 0)) return toast("請填金額", "error");
+      if (amount > 1000000 && !confirm(`金額 ${money(amount)} 很大，確定嗎？`)) return;
+      try {
+        await call("owner_expense_add", { p_date: date, p_category: $("exCat").value, p_item: $("exItem").value, p_amount: amount });
+      } catch (e) { return; }
+      $("exItem").value = ""; $("exAmount").value = "";
+      toast("已新增支出");
+      // 跳到那個月
+      $("month").value = date.slice(0, 7);
+      loadReport();
+    }
+
+    // ===== 設定 =====
+    async function changePin() {
+      const a = $("newPin").value, b = $("newPin2").value;
+      if (a.length < 6) return toast("新密碼至少 6 個字", "error");
+      if (a !== b) return toast("兩次輸入的新密碼不一樣", "error");
+      let msg;
+      try { msg = await call("owner_change_pin", { p_old: $("oldPin").value, p_new: a }); } catch (e) { return; }
+      ["oldPin", "newPin", "newPin2"].forEach(id => ($(id).value = ""));
+      lock(msg);
+    }
+
+    function exportExcel() {
+      if (!report || typeof XLSX === "undefined") return toast("Excel 工具還沒載入，請稍後再試", "error");
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(report.trend.map(t => ({
+        月份: t.month, 營收: t.revenue, 零件成本: Number(t.parts_cost), 零件毛利: t.revenue - t.parts_cost,
+        其他支出: Number(t.expenses), 實際賺: t.revenue - t.parts_cost - t.expenses
+      }))), "每月");
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(report.parts.map(p => ({
+        零件: partName(p), 用量: p.qty, 售價: p.price, 進價: p.cost, 這個月賺: Number(p.profit)
+      }))), "零件毛利");
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(report.expenses.map(x => ({
+        日期: x.date, 類別: x.category, 項目: x.item, 金額: Number(x.amount)
+      }))), "其他支出");
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(costParts.map(p => ({
+        零件: partName(p), 分類: p.category, 庫存: p.stock, 售價: p.price, 進價: p.cost
+      }))), "進價");
+      XLSX.writeFile(wb, `老闆報表_${report.month}.xlsx`);
+    }
+
+    // ===== 開始 =====
+    const now = new Date();
+    $("month").value = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+    $("exDate").value = now.toLocaleDateString("sv-SE");
+    db.auth.getSession().then(({ data }) => {
+      if (!data.session) return (location.href = "index.html");
+      if (token) showOwner();
+      else $("pin").focus();
+    });
+  </script>
+</body>
+</html>

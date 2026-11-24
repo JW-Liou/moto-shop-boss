@@ -53,3 +53,20 @@
   });
   observer.observe(document.body, { subtree: true, childList: true, characterData: true });
 })();
+
+// ----- 3. 老闆專區的入口：按住左上角「竹北榮詮」1.5 秒 -----
+// 員工平常不會發現；進去之後還要輸入老闆密碼
+(function () {
+  const brand = document.querySelector(".topbar .brand");
+  if (!brand) return;
+  let timer = null, fired = false;
+  const start = () => {
+    fired = false;
+    timer = setTimeout(() => { fired = true; location.href = "owner.html"; }, 1500);
+  };
+  const stop = () => clearTimeout(timer);
+  brand.addEventListener("pointerdown", start);
+  ["pointerup", "pointerleave", "pointercancel"].forEach(ev => brand.addEventListener(ev, stop));
+  brand.addEventListener("click", e => { if (fired) e.preventDefault(); });
+  brand.addEventListener("contextmenu", e => e.preventDefault());   // 手機長按不要跳出選單
+})();

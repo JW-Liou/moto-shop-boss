@@ -48,6 +48,7 @@
         <button data-tab="order">叫貨 <span id="tLow">0</span></button>
         <button data-tab="suppliers">廠商</button>
         <button data-tab="moves">進出紀錄</button>
+        <button data-tab="usage">用量分析</button>
       </div>
       <p class="msg" id="msg"></p>
     </section>
@@ -101,6 +102,19 @@
       </div>
       <p class="info">最近 200 筆。綠色是進來、紅色是出去。工單刪掉時，那張單用掉的零件會自動加回庫存。</p>
       <ul class="list" id="moveList"></ul>
+    </section>
+
+    <!-- 5. 用量分析：每個零件每月用掉多少，建議安全庫存設多少 -->
+    <section class="card tab-panel" id="panel-usage" hidden>
+      <div class="card-head">
+        <h2>用量分析</h2>
+        <span class="info" id="usageInfo"></span>
+      </div>
+      <p class="info">工單用掉的數量（修改、刪除工單加回的也算進去）。建議安全庫存 ≈ 大約兩週的用量；廠商送貨比較慢的，可以自己設高一點。</p>
+      <div class="table-wrap">
+        <table class="usage-table" id="usageTable"></table>
+      </div>
+      <p class="info" id="usageIdle"></p>
     </section>
   </main>
 
@@ -250,6 +264,7 @@
       document.querySelectorAll("#invTabs button").forEach(b => b.classList.toggle("active", b.dataset.tab === name));
       document.querySelectorAll(".tab-panel").forEach(p => p.hidden = p.id !== "panel-" + name);
       if (name === "moves") loadMoves();
+      if (name === "usage") loadUsage();
       history.replaceState(null, "", "?tab=" + name);
     }
     $("invTabs").addEventListener("click", e => {
@@ -650,6 +665,98 @@
     }
 
     // ===== 4. 進出紀錄 =====
+    // ===== 5. 用量分析 =====
+    async function loadUsage() {
+      const table = $("usageTable");
+      table.innerHTML = "<tr><td>讀取中…</td></tr>";
+      // 最近 3 個完整的月份＋這個月
+      const now = new Date();
+      const months = [];
+      for (let i = 3; i >= 0; i--) {
+        const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+        months.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`);
+      }
+      const since = new Date(now.getFullYear(), now.getMonth() - 3, 1).toISOString();
+      // 一次最多拿 1000 筆，分批拿
+      let rows = [];
+      for (let from = 0; ; from += 1000) {
+        const { data, error } = await db.from("stock_moves")
+          .select("part_id, change, created_at").eq("reason", "工單使用")
+          .gte("created_at", since).order("id").range(from, from + 999);
+        if (error) { table.innerHTML = ""; return showError(error); }
+        rows = rows.concat(data);
+        if (data.length < 1000) break;
+      }
+      // 零件 × 月份 的用量
+      const use = {};
+      rows.forEach(m => {
+        const d = new Date(m.created_at);
+        const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+        (use[m.part_id] ||= {})[key] = ((use[m.part_id] || {})[key] || 0) - m.change;
+      });
+
+      table.innerHTML = "";
+      const head = table.insertRow();
+      ["零件", ...months.map((m, i) => i === 3 ? `本月（到今天）` : `${Number(m.slice(5))} 月`), "月平均", "現在", "還夠用", "安全庫存", "建議", ""]
+        .forEach(t => { const th = document.createElement("th"); th.textContent = t; head.appendChild(th); });
+
+      // 月平均：只算「有資料的完整月份」（剛開始用系統時，前面幾個月是空的，不能拿來平均）
+      //          一個完整月份都還沒有，就用這個月到今天的用量推估一整個月
+      const fullMonths = months.slice(0, 3).filter(m => Object.values(use).some(u => (u[m] || 0) > 0));
+      const dayOfMonth = now.getDate();
+      const idle = [];
+      const list = parts.filter(p => p.active).map(p => {
+        const u = use[p.id] || {};
+        const avg = fullMonths.length
+          ? fullMonths.reduce((s, m) => s + Math.max(0, u[m] || 0), 0) / fullMonths.length
+          : Math.max(0, u[months[3]] || 0) / dayOfMonth * 30;
+        return { p, u, avg };
+      }).sort((a, b) => b.avg - a.avg);
+
+      list.forEach(({ p, u, avg }) => {
+        const total = months.reduce((s, m) => s + Math.max(0, u[m] || 0), 0);
+        if (!total) { idle.push(partName(p)); return; }
+        const suggest = Math.max(1, Math.ceil(avg / 2));
+        const weeks = avg > 0 ? p.stock / (avg / 4.3) : Infinity;
+        const tr = table.insertRow();
+        const cells = [
+          partName(p),
+          ...months.map(m => Math.max(0, u[m] || 0) || "-"),
+          avg ? (Math.round(avg * 10) / 10) : "-",
+          `${p.stock}${p.unit}`,
+          weeks === Infinity ? "-" : weeks < 1 ? "不到 1 週" : weeks > 26 ? "半年以上" : `約 ${Math.round(weeks)} 週`,
+          p.safety_stock,
+          suggest
+        ];
+        cells.forEach((t, i) => {
+          const td = tr.insertCell();
+          td.textContent = t;
+          if (i === 0) td.className = "name";
+          if (i === cells.length - 3 && weeks < 2) td.className = "warn";
+          if (i === cells.length - 1 && suggest !== p.safety_stock) td.className = "diff";
+        });
+        const td = tr.insertCell();
+        if (suggest !== p.safety_stock) {
+          const b = el("button", "btn-small btn-plain", "套用");
+          b.title = `安全庫存改成 ${suggest}`;
+          b.onclick = async () => {
+            const { error } = await db.from("parts").update({ safety_stock: suggest }).eq("id", p.id);
+            if (error) return toast("更新失敗：" + error.message, "error");
+            toast(`${partName(p)} 安全庫存改成 ${suggest}`);
+            await loadAll();
+            loadUsage();
+          };
+          td.appendChild(b);
+        }
+      });
+      $("usageInfo").textContent = fullMonths.length
+        ? `月平均用 ${fullMonths.map(m => Number(m.slice(5)) + " 月").join("、")} 算`
+        : "還沒有完整一個月的資料，先用這個月推估";
+      $("usageIdle").textContent = idle.length
+        ? `這 4 個月都沒用過（可以考慮少叫一點，或在「編輯」裡停用）：${idle.join("、")}`
+        : "";
+    }
+
     async function loadMoves() {
       const ul = $("moveList");
       ul.innerHTML = "";
