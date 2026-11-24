@@ -898,3 +898,26 @@ a.btn-small { text-decoration: none; }
 /* 小提示往上移一點，不要擋到右下角的小助理按鈕 */
 #toastBox { bottom: 84px; }
 .ai-proposal.saved .ai-actions { display: none; }
+
+/* ===== 開工單選零件：提醒要扣哪一個、臨時零件／代工 ===== */
+.use-hints { display: grid; gap: 6px; margin-bottom: 8px; }
+.use-hints:empty { display: none; }
+.use-hint { padding: 8px 10px; border-radius: 10px; font-size: 14.5px; line-height: 1.5; }
+.use-hint.ask { background: #fff7ed; border: 1.5px solid #fdba74; }
+.use-hint.ask b { color: #9a3412; }
+.use-hint.ok { background: #f0fdf4; border: 1px solid #bbf7d0; color: #14532d; }
+.hint-sub { color: #64748b; font-size: 13px; }
+.hint-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.hint-chip { border: 1.5px solid #93c5fd; background: #fff; color: #1e3a8a; border-radius: 999px; padding: 4px 12px; font: inherit; font-size: 14px; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
+.hint-chip:hover { background: #eff6ff; }
+.hint-chip.empty { border-color: #fca5a5; color: #991b1b; }
+.hint-chip.skip { border-style: dashed; border-color: #94a3b8; color: #475569; font-weight: 500; }
+.hint-chip .tag { font-size: 11.5px; background: #1d4ed8; color: #fff; border-radius: 999px; padding: 0 7px; }
+.link-btn { border: 0; background: transparent; color: #1d4ed8; text-decoration: underline; cursor: pointer; font: inherit; font-size: 13.5px; margin-left: 8px; padding: 0; }
+.temp-row { margin-top: 8px; }
+.temp-row select { flex: 0 0 auto; min-width: 0; width: auto; }
+.temp-row .temp-name { flex: 1; min-width: 160px; width: auto; }
+.temp-row input[type=number] { width: 80px; }
+.use-note { margin: 6px 0 0; font-size: 13px; color: #64748b; }
+.use-list li.temp { background: #fef3c7; color: #78350f; }
+.use-list li.temp .btn-icon { color: #78350f; }

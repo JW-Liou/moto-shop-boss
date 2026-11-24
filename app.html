@@ -126,12 +126,28 @@
         </div>
         <!-- 用了哪些零件：存檔後自動扣庫存（還沒啟用庫存時會自動藏起來） -->
         <div class="use-parts" id="useParts" hidden>
+          <!-- 選了常用項目（例如機油），這裡會問「要扣哪一罐？」 -->
+          <div class="use-hints" id="useHints"></div>
           <div class="use-row">
             <span class="use-label">用了哪些零件</span>
             <select id="usePart"></select>
             <input id="useQty" type="number" min="1" value="1" aria-label="數量">
             <button class="btn-small" onclick="addUsePart()">加入</button>
+            <button class="btn-small btn-plain" type="button" onclick="toggleTempRow()">＋臨時零件／代工</button>
           </div>
+          <!-- 不在庫存裡的：車禍臨時叫的零件、外包代工、客人自己帶的 -->
+          <div class="use-row temp-row" id="tempRow" hidden>
+            <select id="tempKind" aria-label="種類">
+              <option>臨時零件</option>
+              <option>代工</option>
+              <option>客人自備</option>
+            </select>
+            <input id="tempName" class="temp-name" placeholder="品名，例如：右後照鏡、烤漆">
+            <input id="tempQty" type="number" min="1" value="1" aria-label="數量">
+            <input id="tempPrice" type="number" min="0" placeholder="單價" aria-label="單價">
+            <button class="btn-small" onclick="addTempPart()">加入</button>
+          </div>
+          <p class="use-note" id="tempNote" hidden>臨時零件、代工、客人自備的不會扣庫存，只會記在這張工單的「零件」和金額裡。</p>
           <ul class="use-list" id="useList"></ul>
         </div>
         <div class="form-actions">
@@ -335,6 +351,7 @@
       if (!list.includes(name)) list.push(name);
       input.value = list.join("、");
       select.value = ""; // 選完跳回預設，方便再選下一個
+      refreshPartHints();  // 有對應的零件就問「要扣哪一個」
     }
 
     // 最近查詢的車（存在這台電腦的瀏覽器裡，最多 8 台）
@@ -573,6 +590,7 @@
 
       document.getElementById("rDate").value = today();
       document.getElementById("bikeBox").hidden = false;
+      resetPartsForBike();
       loadRecords();
       loadBikeAppts();
     }
@@ -589,6 +607,7 @@
         return;
       }
       currentRecords = data; // 記下來，新增或修改工單時拿來比對里程
+      loadLastUsed(data.map(r => r.id)); // 這台車上次用的零件，下次自動帶入
 
       const list = document.getElementById("records");
       list.innerHTML = "";
@@ -667,6 +686,7 @@
         items
       });
       if (!ok) return;
+      if (!checkPartsBeforeSave()) return;
 
       const { data: saved, error } = await db.from("service_records").insert({
         bike_id: currentBike.id,
@@ -1226,11 +1246,57 @@
       loadNotes();
     }
     // ===== 庫存：開工單時選用了哪些零件，存檔後自動扣庫存 =====
-    let stockParts = [];   // 零件清單（含現在數量）
-    let usedParts = [];    // 這張工單選了哪些：{ part, qty }
-    let autoPartsText = "";  // 上次自動填進「零件」欄的字，使用者自己改過就不再覆蓋
+    let stockParts = [];       // 零件清單（含現在數量）
+    let usedParts = [];        // 這張工單用了哪些：{ part, qty, item, auto } 或臨時的 { temp, kind, name, qty, price }
+    let skipItems = new Set(); // 這張工單哪些項目「不扣庫存」（客人自備、代工…）
+    let seenItems = new Set(); // 已經處理過的項目（避免重複自動帶入）
+    let lastUsed = new Map();  // 這台車上次每個項目用的是哪個零件：項目 → 零件 id
+    let partsBikeId = null;    // 目前這些選擇是哪一台車的
+    let autoPartsText = "";    // 上次自動填進「零件」欄的字，使用者自己改過就不再覆蓋
 
     const partLabel = p => [p.name, p.spec].filter(Boolean).join(" ");
+    const norm = s => (s || "").toLowerCase().replace(/[\s\-_]/g, "");
+
+    // 常用項目 → 庫存裡哪些零件算是它的
+    //   kw：品名或規格裡有這個字；cats：這個分類整個都算（只放不會跟別的項目混在一起的分類）
+    const ITEM_RULES = {
+      "機油":   { kw: "機油",   cats: ["機油"] },
+      "齒輪油": { kw: "齒輪油", cats: ["齒輪油"] },
+      "空濾":   { kw: "空濾",   cats: [] },
+      "火星塞": { kw: "火星塞", cats: [] },
+      "煞車皮": { kw: "煞車皮", cats: [] },
+      "煞車油": { kw: "煞車油", cats: [] },
+      "輪胎":   { kw: "輪胎",   cats: [] },
+      "皮帶":   { kw: "皮帶",   cats: [] },
+      "普利珠": { kw: "普利珠", cats: [] },
+      "電瓶":   { kw: "電瓶",   cats: [] }
+    };
+
+    function partMatchesItem(p, item) {
+      const r = ITEM_RULES[item];
+      if (!r) return false;
+      return (p.name || "").includes(r.kw) || (p.spec || "").includes(r.kw) || r.cats.includes(p.category);
+    }
+    // 這個零件是哪個項目用的（例如「齒輪油 80W-90」→ 齒輪油）；看不出來就是 null
+    const itemOfPart = p => Object.keys(ITEM_RULES).find(item => partMatchesItem(p, item)) || null;
+    const partsForItem = item => stockParts.filter(p => p.active && partMatchesItem(p, item));
+
+    // 零件規格寫的車型跟這台車一樣（例如空濾「勁戰六代」）
+    function fitsBike(p) {
+      const m = norm(currentBike && currentBike.model), sp = norm(p.spec);
+      return m.length >= 2 && sp.length >= 2 && (m.includes(sp) || sp.includes(m));
+    }
+
+    // 「項目」欄裡有哪些常用項目（「換機油、齒輪油」→ 機油、齒輪油）
+    function currentItems() {
+      const words = document.getElementById("rItems").value.split(/[、,，/\s]+/).filter(Boolean);
+      return Object.keys(ITEM_RULES).filter(item => words.some(w => w.includes(item)));
+    }
+    // 這個項目已經處理好了嗎（選了零件、臨時零件寫了它、或按了不扣庫存）
+    function itemCovered(item) {
+      return skipItems.has(item) ||
+        usedParts.some(u => (u.temp ? u.name.includes(item) : u.item === item));
+    }
 
     async function loadStockParts() {
       const { data, error } = await db.from("parts")
@@ -1245,8 +1311,9 @@
       stockParts = data;
       document.getElementById("useParts").hidden = data.length === 0;
 
-      // 下拉選單依分類分組
+      // 下拉選單依分類分組（選的值保留，避免每分鐘重新整理時被清掉）
       const sel = document.getElementById("usePart");
+      const keep = sel.value;
       sel.innerHTML = "";
       const first = el("option", "", "選零件…");
       first.value = "";
@@ -1262,50 +1329,241 @@
         o.value = p.id;
         groups[p.category].appendChild(o);
       });
+      sel.value = keep;
 
       // 工作看板上的「要叫貨」提醒
       const low = data.filter(p => p.active && p.safety_stock > 0 && p.stock <= p.safety_stock).length;
       const box = document.getElementById("lowStock");
       box.hidden = low === 0;
       box.textContent = `${low} 項零件要叫貨 ›`;
+      if (currentBike) refreshPartHints();
     }
 
+    // 換了一台車：清掉上一台車還沒存的選擇
+    function resetPartsForBike() {
+      if (!currentBike || partsBikeId === currentBike.id) return;
+      partsBikeId = currentBike.id;
+      usedParts = [];
+      skipItems = new Set();
+      seenItems = new Set();
+      lastUsed = new Map();
+      autoPartsText = "";
+      document.getElementById("rParts").value = "";
+      renderUsedParts();
+    }
+
+    // 這台車以前每個項目用的是哪個零件（看工單扣庫存的紀錄）
+    async function loadLastUsed(recordIds) {
+      lastUsed = new Map();
+      if (!recordIds.length || !stockParts.length) return;
+      const { data, error } = await db.from("stock_moves")
+        .select("part_id, record_id, created_at")
+        .in("record_id", recordIds.slice(0, 200))
+        .eq("reason", "工單使用")
+        .order("created_at", { ascending: false })
+        .limit(300);
+      if (error || !data) return;
+      data.forEach(m => {
+        const p = stockParts.find(x => x.id === m.part_id);
+        const item = p && itemOfPart(p);
+        if (item && !lastUsed.has(item)) lastUsed.set(item, p.id);
+      });
+      refreshPartHints();
+    }
+
+    // 數量不夠要先問
+    function stockOk(p, addQty) {
+      const already = usedParts.filter(u => !u.temp && u.part.id === p.id).reduce((s, u) => s + u.qty, 0);
+      if (already + addQty <= p.stock) return true;
+      return confirm(`${partLabel(p)} 只剩 ${p.stock}${p.unit}，確定要用 ${already + addQty}${p.unit} 嗎？\n（可能是還沒把進貨登記進去）`);
+    }
+
+    function addAmount(delta) {
+      if (!delta) return;
+      const amount = document.getElementById("rAmount");
+      amount.value = Math.max(0, (Number(amount.value) || 0) + delta) || "";
+    }
+
+    // 把某個零件加進這張工單（item：算哪個項目的；auto：自動帶入的）
+    function pushPart(p, qty, item, auto = false) {
+      usedParts.push({ part: p, qty, item, auto });
+      addAmount((p.price || 0) * qty);
+      skipItems.delete(item);
+    }
+
+    // ===== 選了常用項目 → 問「要扣哪一個」，並自動帶入上次用的 =====
+    function refreshPartHints() {
+      const box = document.getElementById("useHints");
+      if (!box || !stockParts.length) return;
+      const items = currentItems();
+
+      // 1. 項目被刪掉了：自動帶入的零件也一起拿掉
+      usedParts = usedParts.filter(u => {
+        if (u.auto && !items.includes(u.item)) { addAmount(-(u.part.price || 0) * u.qty); return false; }
+        return true;
+      });
+      [...skipItems].forEach(i => { if (!items.includes(i)) skipItems.delete(i); });
+
+      // 2. 新出現的項目：先帶入「上次用的」，沒有的話帶入「唯一符合車型」的
+      items.forEach(item => {
+        if (seenItems.has(item)) return;
+        seenItems.add(item);
+        if (itemCovered(item)) return;
+        const list = partsForItem(item);
+        let pick = list.find(p => p.id === lastUsed.get(item) && p.stock > 0);
+        if (!pick) {
+          const fit = list.filter(fitsBike);
+          if (fit.length === 1 && fit[0].stock > 0) pick = fit[0];
+        }
+        if (pick) pushPart(pick, 1, item, true);
+      });
+      [...seenItems].forEach(i => { if (!items.includes(i)) seenItems.delete(i); });
+
+      // 3. 畫出每個項目的提醒
+      box.innerHTML = "";
+      items.forEach(item => {
+        const list = partsForItem(item);
+        if (!list.length) return;   // 庫存裡沒有這類零件（例如還沒建檔），就不問
+        const row = el("div", "use-hint");
+        const used = usedParts.filter(u => !u.temp && u.item === item);
+        const temps = usedParts.filter(u => u.temp && u.name.includes(item));
+
+        if (skipItems.has(item)) {
+          row.classList.add("ok");
+          row.append(el("b", "", "✓ " + item), "　不扣庫存（客人自備／代工／臨時零件）");
+          const undo = el("button", "link-btn", "改回來");
+          undo.type = "button";
+          undo.onclick = () => { skipItems.delete(item); refreshPartHints(); };
+          row.appendChild(undo);
+        } else if (used.length || temps.length) {
+          row.classList.add("ok");
+          const names = used.map(u => `${partLabel(u.part)} ×${u.qty}${u.auto ? (lastUsed.get(item) === u.part.id ? "（上次用的）" : "（符合車型）") : ""}`)
+            .concat(temps.map(u => `${u.name} ×${u.qty}（${u.kind}）`));
+          row.append(el("b", "", "✓ " + item), "　" + names.join("、"));
+          if (used.some(u => u.auto)) row.append(el("span", "hint-sub", "　自動帶入的，不對就在下面按 × 拿掉再選"));
+        } else {
+          row.classList.add("ask");
+          row.append(el("b", "", item), "　要扣哪一個？");
+          const chips = el("div", "hint-chips");
+          list.forEach(p => {
+            const c = el("button", "hint-chip" + (p.stock <= 0 ? " empty" : ""));
+            c.type = "button";
+            c.textContent = (p.name === item ? (p.spec || p.name) : partLabel(p)) + `（剩 ${p.stock}）`;
+            if (p.id === lastUsed.get(item)) c.appendChild(el("span", "tag", "上次用的"));
+            else if (fitsBike(p)) c.appendChild(el("span", "tag", "符合車型"));
+            c.onclick = () => pickPart(p, item);
+            chips.appendChild(c);
+          });
+          const skip = el("button", "hint-chip skip", "不扣庫存");
+          skip.type = "button";
+          skip.title = "客人自備、代工、或用臨時零件";
+          skip.onclick = () => { skipItems.add(item); refreshPartHints(); };
+          chips.appendChild(skip);
+          row.appendChild(chips);
+        }
+        box.appendChild(row);
+      });
+      renderUsedParts();
+    }
+
+    // 從提醒的按鈕選零件
+    function pickPart(p, item) {
+      if (!checkPartFits(p, item)) return;
+      if (!stockOk(p, 1)) return;
+      pushPart(p, 1, item);
+      refreshPartHints();
+    }
+
+    // 防呆：選的零件跟車型對不上（例如 DRG 選到 JET SL 的空濾）、同一個項目選了兩種
+    function checkPartFits(p, item) {
+      const siblings = partsForItem(item);
+      if (!fitsBike(p) && siblings.some(fitsBike) && norm(p.spec)) {
+        const right = siblings.filter(fitsBike).map(partLabel).join("、");
+        if (!confirm(`「${partLabel(p)}」看起來不是這台車（${currentBike.model}）用的。\n符合車型的是：${right}\n\n確定要用「${partLabel(p)}」嗎？`)) return false;
+      }
+      const same = usedParts.filter(u => !u.temp && u.item === item && u.part.id !== p.id);
+      if (same.length && !confirm(`「${item}」已經選了 ${same.map(u => partLabel(u.part)).join("、")}，\n確定還要再加「${partLabel(p)}」嗎？\n\n（換一個的話，請先按 × 拿掉原本的）`)) return false;
+      return true;
+    }
+
+    // 從下拉選單加入零件
     function addUsePart() {
       const id = Number(document.getElementById("usePart").value);
       const qty = Number(document.getElementById("useQty").value);
       const p = stockParts.find(x => x.id === id);
       if (!p) return alert("請先選零件");
       if (!Number.isInteger(qty) || qty <= 0) return alert("數量要是大於 0 的整數");
-      const already = usedParts.filter(u => u.part.id === id).reduce((s, u) => s + u.qty, 0);
-      if (already + qty > p.stock && !confirm(`${partLabel(p)} 只剩 ${p.stock}${p.unit}，確定要用 ${already + qty}${p.unit} 嗎？\n（可能是還沒把進貨登記進去）`)) return;
 
-      usedParts.push({ part: p, qty });
-      // 有售價的零件，金額自動加上去
-      if (p.price) {
-        const amount = document.getElementById("rAmount");
-        amount.value = (Number(amount.value) || 0) + p.price * qty;
+      // 防呆：選的零件跟「項目」對不上（項目寫機油，零件卻選齒輪油）
+      const item = itemOfPart(p);
+      if (item && !currentItems().includes(item)) {
+        const now = currentItems();
+        const msg = `「${partLabel(p)}」是「${item}」用的，但項目裡沒有「${item}」` +
+          (now.length ? `（目前是：${now.join("、")}）` : "") +
+          `。\n\n按「確定」：把「${item}」加進項目\n按「取消」：不加這個零件（可能選錯了）`;
+        if (!confirm(msg)) return;
+        const input = document.getElementById("rItems");
+        const list = input.value.split("、").map(x => x.trim()).filter(Boolean);
+        list.push(item);
+        input.value = list.join("、");
+        seenItems.add(item);   // 已經手動選了，不用再自動帶入
       }
+      if (item && !checkPartFits(p, item)) return;
+      if (!stockOk(p, qty)) return;
+
+      pushPart(p, qty, item);
       document.getElementById("usePart").value = "";
       document.getElementById("useQty").value = 1;
-      renderUsedParts();
+      refreshPartHints();
+    }
+
+    // ===== 臨時零件／代工／客人自備：不扣庫存，只記在工單上 =====
+    function toggleTempRow() {
+      const row = document.getElementById("tempRow");
+      row.hidden = !row.hidden;
+      document.getElementById("tempNote").hidden = row.hidden;
+      if (!row.hidden) document.getElementById("tempName").focus();
+    }
+
+    function addTempPart() {
+      const kind = document.getElementById("tempKind").value;
+      const name = document.getElementById("tempName").value.trim();
+      const qty = Number(document.getElementById("tempQty").value);
+      const priceText = document.getElementById("tempPrice").value.trim();
+      const price = Number(priceText) || 0;
+      if (!name) return alert("請填品名");
+      if (!Number.isInteger(qty) || qty <= 0) return alert("數量要是大於 0 的整數");
+      if (price < 0) return alert("單價不能是負的");
+      if (!priceText && kind !== "客人自備" && !confirm(`「${name}」沒有填單價，金額不會加上去，確定嗎？`)) return;
+      // 庫存裡其實有這個零件，提醒一下（例如打了「機油」）
+      const inStock = stockParts.filter(p => p.active && p.stock > 0 && (name.includes(p.name) || p.name.includes(name)));
+      if (kind === "臨時零件" && inStock.length &&
+          !confirm(`庫存裡有「${inStock.slice(0, 3).map(partLabel).join("、")}」。\n用庫存的要從上面選才會扣庫存。\n\n確定這個是臨時叫的、不扣庫存嗎？`)) return;
+
+      usedParts.push({ temp: true, kind, name, qty, price });
+      addAmount(price * qty);
+      ["tempName", "tempPrice"].forEach(id => (document.getElementById(id).value = ""));
+      document.getElementById("tempQty").value = 1;
+      refreshPartHints();
     }
 
     function removeUsePart(i) {
       const u = usedParts[i];
-      if (u.part.price) {
-        const amount = document.getElementById("rAmount");
-        amount.value = Math.max(0, (Number(amount.value) || 0) - u.part.price * u.qty) || "";
-      }
+      addAmount(-((u.temp ? u.price : u.part.price) || 0) * u.qty);
       usedParts.splice(i, 1);
-      renderUsedParts();
+      refreshPartHints();
     }
 
     function renderUsedParts() {
       const ul = document.getElementById("useList");
       ul.innerHTML = "";
       usedParts.forEach((u, i) => {
-        const li = el("li");
-        li.append(`${partLabel(u.part)} ×${u.qty}${u.part.unit}` + (u.part.price ? `　$${(u.part.price * u.qty).toLocaleString()}` : ""));
+        const li = el("li", u.temp ? "temp" : "");
+        if (u.temp) {
+          li.append(`【${u.kind}】${u.name} ×${u.qty}` + (u.price ? `　$${(u.price * u.qty).toLocaleString()}` : ""));
+        } else {
+          li.append(`${partLabel(u.part)} ×${u.qty}${u.part.unit}` + (u.part.price ? `　$${(u.part.price * u.qty).toLocaleString()}` : ""));
+        }
         const x = el("button", "btn-icon", "×");
         x.title = "拿掉";
         x.onclick = () => removeUsePart(i);
@@ -1314,22 +1572,46 @@
       });
       // 「零件」欄自動寫上用了什麼（使用者自己改過就不動它）
       const field = document.getElementById("rParts");
-      const text = usedParts.map(u => `${partLabel(u.part)}×${u.qty}`).join("、");
+      const text = usedParts.map(u => u.temp ? `${u.name}×${u.qty}（${u.kind}）` : `${partLabel(u.part)}×${u.qty}`).join("、");
       if (field.value.trim() === "" || field.value === autoPartsText) field.value = text;
       autoPartsText = text;
     }
 
-    // 工單存好之後扣庫存
+    // 存檔前最後檢查：有項目沒選零件、或零件跟項目對不上
+    function checkPartsBeforeSave() {
+      if (!stockParts.length) return true;
+      const items = currentItems();
+      const missing = items.filter(item => partsForItem(item).length && !itemCovered(item));
+      if (missing.length && !confirm(
+        `「${missing.join("、")}」沒有選用哪一個零件，庫存不會扣。\n\n` +
+        `・按「取消」回去選（上面有按鈕可以直接點）\n` +
+        `・客人自備或代工，可以按「不扣庫存」\n\n確定直接存檔嗎？`)) return false;
+      const wrong = usedParts.filter(u => !u.temp && u.item && !items.includes(u.item));
+      if (wrong.length && !confirm(
+        `下面的零件跟項目對不上：\n${wrong.map(u => `・${partLabel(u.part)}（${u.item}用的）`).join("\n")}\n\n項目裡沒有「${[...new Set(wrong.map(u => u.item))].join("、")}」，確定嗎？`)) return false;
+      return true;
+    }
+
+    // 工單存好之後扣庫存（臨時零件、代工、客人自備的不扣）
     async function deductUsedParts(recordId) {
-      if (!usedParts.length) return;
-      const rows = usedParts.map(u => ({ part_id: u.part.id, change: -u.qty, reason: "工單使用", record_id: recordId }));
-      const { error } = await db.from("stock_moves").insert(rows);
-      if (error) toast("工單存好了，但庫存沒有扣到：" + error.message, "error");
-      else toast(`已扣庫存：${usedParts.map(u => `${partLabel(u.part)}×${u.qty}`).join("、")}`, "ok");
+      const stock = usedParts.filter(u => !u.temp);
+      if (stock.length) {
+        const rows = stock.map(u => ({ part_id: u.part.id, change: -u.qty, reason: "工單使用", record_id: recordId }));
+        const { error } = await db.from("stock_moves").insert(rows);
+        if (error) toast("工單存好了，但庫存沒有扣到：" + error.message, "error");
+        else toast(`已扣庫存：${stock.map(u => `${partLabel(u.part)}×${u.qty}`).join("、")}`, "ok");
+        // 記住這次用的，下次自動帶入
+        stock.forEach(u => { if (u.item) lastUsed.set(u.item, u.part.id); });
+      }
       usedParts = [];
+      skipItems = new Set();
+      seenItems = new Set();
       autoPartsText = "";
+      document.getElementById("tempRow").hidden = true;
+      document.getElementById("tempNote").hidden = true;
+      document.getElementById("useHints").innerHTML = "";
       renderUsedParts();
-      loadStockParts();
+      if (stock.length) loadStockParts();
     }
 
     // ===== 修改車輛資料、刪除車輛 =====
@@ -1758,6 +2040,12 @@
     }
 
     setupQuickItems();
+    // 自己在「項目」打字也會問要扣哪個零件（停下來 0.5 秒才檢查）
+    let itemsTimer;
+    document.getElementById("rItems").addEventListener("input", () => {
+      clearTimeout(itemsTimer);
+      itemsTimer = setTimeout(refreshPartHints, 500);
+    });
     setupBoardTabs();
     showRecent();
     checkLogin();
