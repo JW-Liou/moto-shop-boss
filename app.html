@@ -16,6 +16,7 @@
   <script src="config.js"></script>
   <script src="ui.js" defer></script>
   <script src="assistant.js" defer></script>
+  <script src="models.js" defer></script>
 </head>
 <body>
   <!-- 上方標題列 -->
@@ -56,7 +57,7 @@
         </div>
         <h3>車輛資料</h3>
         <div class="form-grid">
-          <label>車型 <small>選填</small><input id="model" placeholder="例如：勁戰六代"></label>
+          <label>車型 <small>選填</small><input id="model" placeholder="點一下選車型，或自己打" data-model-picker></label>
           <label>年份 <small>選填</small><input type="number" id="year" onchange="rocToAD(this)"></label>
           <label>目前里程（公里）<small>選填</small><input type="number" id="bikeKm"></label>
         </div>
@@ -93,7 +94,7 @@
           <summary>修改車輛資料</summary>
           <div class="form-grid">
             <label>車牌<input id="editPlate"></label>
-            <label>車型<input id="editModel"></label>
+            <label>車型<input id="editModel" data-model-picker></label>
             <label>年份<input id="editYear" type="number" onchange="rocToAD(this)"></label>
             <label>里程（公里）<input id="editKm" type="number"></label>
           </div>
