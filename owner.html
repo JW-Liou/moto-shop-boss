@@ -43,8 +43,19 @@
           <h2>毛利報表</h2>
           <label class="month-pick">月份 <input type="month" id="month" onchange="loadReport()"></label>
         </div>
-        <div class="kpis" id="kpis"></div>
-        <p class="yoy" id="yoy"></p>
+        <div class="owner-summary">
+          <!-- 主角：這個月實際賺多少 -->
+          <div class="hero" id="hero">
+            <div class="hero-top"><span id="heroLabel">實際賺</span><span class="hero-rate" id="heroRate"></span></div>
+            <div class="hero-value" id="heroValue"></div>
+            <div class="hero-formula" id="heroFormula"></div>
+            <div class="hero-bar" id="heroBar"></div>
+            <div class="hero-legend" id="heroLegend"></div>
+            <p class="yoy" id="yoy"></p>
+            <div class="hero-foot" id="heroFoot"></div>
+          </div>
+          <div class="kpis" id="kpis"></div>
+        </div>
         <p class="owner-warn" id="warn" hidden></p>
         <h3>最近 12 個月</h3>
         <div class="trend" id="trend"></div>
@@ -251,7 +262,7 @@
       $("lockBtn").hidden = true;
       $("lockView").hidden = false;
       // 把畫面上的數字清掉，避免別人看到
-      ["kpis", "yoy", "trend", "partsTable", "costTable", "exList", "ordersTable", "custTable", "agingTable", "supList", "logList"]
+      ["kpis", "yoy", "heroValue", "heroFormula", "heroBar", "heroLegend", "heroFoot", "heroRate", "trend", "partsTable", "costTable", "exList", "ordersTable", "custTable", "agingTable", "supList", "logList"]
         .forEach(id => ($(id).innerHTML = ""));
       $("orderModal").hidden = true;
       $("lockMsg").textContent = typeof message === "string" ? message : "";
@@ -306,39 +317,76 @@
       const cur = monthNumbers(report.month);
       const ly = monthNumbers(lastYear(report.month));
 
+      // 主角卡：實際賺
+      const mLabel = Number(report.month.slice(5)) + " 月";
+      $("heroLabel").textContent = mLabel + "實際賺";
+      $("heroValue").textContent = money(cur.net);
+      $("hero").classList.toggle("loss", cur.net < 0);
+      $("heroRate").textContent = "淨利率 " + pct(cur.net, cur.revenue);
+      $("heroFormula").textContent = `營收 ${money(cur.revenue)} − 成本 ${money(cur.cost)} − 其他支出 ${money(cur.expenses)}`;
+      // 營收被分成三塊：成本、其他支出、實際賺
+      const bar = $("heroBar");
+      bar.innerHTML = "";
+      const base = Math.max(cur.revenue, cur.cost + cur.expenses, 1);
+      [["cost", cur.cost, "成本"], ["exp", cur.expenses, "其他支出"], ["net", Math.max(0, cur.net), "實際賺"]].forEach(([c, v, t]) => {
+        const seg = el("div", "seg " + c);
+        seg.style.width = (v / base * 100) + "%";
+        seg.title = `${t} ${money(v)}`;
+        bar.appendChild(seg);
+      });
+      $("heroLegend").innerHTML = "";
+      [["cost", "成本", cur.cost], ["exp", "其他支出", cur.expenses], ["net", "實際賺", cur.net]].forEach(([c, t, v]) => {
+        const sp = el("span", "lg " + c, `${t} ${pct(v, cur.revenue)}`);
+        $("heroLegend").appendChild(sp);
+      });
+      $("heroFoot").textContent = `倉庫裡的零件價值 ${money(report.stock_value)}（庫存 × 進價）`;
+
       const kpis = $("kpis");
       kpis.innerHTML = "";
       [
         ["營收", money(cur.revenue), `${cur.orders} 張工單・${cur.visits} 位來客`],
-        ["成本", money(cur.cost), "零件 × 進價 ＋ 臨時零件、代工"],
+        ["成本", money(cur.cost), "零件進價＋臨時零件、代工"],
         ["毛利", money(cur.gross), "毛利率 " + pct(cur.gross, cur.revenue)],
         ["其他支出", money(cur.expenses), "房租、水電、薪資…"],
-        ["實際賺", money(cur.net), "淨利率 " + pct(cur.net, cur.revenue)],
         ["客單價", money(cur.visits ? cur.revenue / cur.visits : 0), "平均每位來客花多少"],
-        ["工錢收入", money(cur.labor), `占營收 ${pct(cur.labor, cur.revenue)}（估算）`],
-        ["庫存價值", money(report.stock_value), "倉庫裡的零件 × 進價"]
-      ].forEach(([label, value, sub], i) => {
-        const k = el("div", "kpi" + (i === 4 ? (cur.net >= 0 ? " good" : " bad") : ""));
+        ["工錢收入", money(cur.labor), `占營收 ${pct(cur.labor, cur.revenue)}（估算）`]
+      ].forEach(([label, value, sub]) => {
+        const k = el("div", "kpi");
         k.append(el("div", "kpi-label", label), el("div", "kpi-value", value), el("div", "kpi-sub", sub));
         kpis.appendChild(k);
       });
 
-      // 跟去年同月比
+      // 跟去年比：這個月還沒過完，就跟去年同一段日期比（比較公平）
       const yoy = $("yoy");
-      if (ly.revenue > 0) {
-        const diff = (a, b) => {
-          if (!b) return "-";
-          const v = Math.round((a - b) / Math.abs(b) * 1000) / 10;
-          return (v >= 0 ? "▲ " : "▼ ") + Math.abs(v) + "%";
-        };
+      const diff = (a, b) => {
+        if (!b) return "-";
+        const v = Math.round((a - b) / Math.abs(b) * 1000) / 10;
+        return (v >= 0 ? "▲ " : "▼ ") + Math.abs(v) + "%";
+      };
+      const chips = (title, list) => {
         yoy.innerHTML = "";
-        yoy.append(`跟去年 ${Number(report.month.slice(5))} 月比：`);
-        [["營收", cur.revenue, ly.revenue], ["來客", cur.visits, ly.visits], ["客單價", cur.visits ? cur.revenue / cur.visits : 0, ly.visits ? ly.revenue / ly.visits : 0], ["實際賺", cur.net, ly.net]]
-          .forEach(([name, a, b]) => {
-            const sp = el("span", "yoy-item " + (a >= b ? "up" : "down"), `${name} ${diff(a, b)}`);
-            sp.title = `今年 ${Math.round(a).toLocaleString()}，去年 ${Math.round(b).toLocaleString()}`;
-            yoy.appendChild(sp);
-          });
+        yoy.append(title);
+        list.forEach(([name, a, b]) => {
+          const sp = el("span", "yoy-item " + (a >= b ? "up" : "down"), `${name} ${diff(a, b)}`);
+          sp.title = `今年 ${Math.round(a).toLocaleString()}，去年 ${Math.round(b).toLocaleString()}`;
+          yoy.appendChild(sp);
+        });
+      };
+      const avg = (rev, v) => v ? rev / v : 0;
+      const same = report.ly_same;
+      if (same && Number(same.revenue) > 0) {
+        const to = same.to.slice(5).replace("-", "/").replace(/^0/, "");
+        chips(`跟去年同期（${Number(report.month.slice(5))}/1～${to}）比：`, [
+          ["營收", cur.revenue, Number(same.revenue)],
+          ["來客", cur.visits, Number(same.visits)],
+          ["客單價", avg(cur.revenue, cur.visits), avg(Number(same.revenue), Number(same.visits))],
+          ["毛利", cur.gross, Number(same.revenue) - Number(same.cost)]
+        ]);
+      } else if (ly.revenue > 0) {
+        chips(`跟去年 ${Number(report.month.slice(5))} 月比：`, [
+          ["營收", cur.revenue, ly.revenue], ["來客", cur.visits, ly.visits],
+          ["客單價", avg(cur.revenue, cur.visits), avg(ly.revenue, ly.visits)], ["實際賺", cur.net, ly.net]
+        ]);
       } else {
         yoy.textContent = `去年 ${Number(report.month.slice(5))} 月還沒有資料，明年就能比較了。`;
       }
@@ -463,6 +511,7 @@
 
     function openOrder(o) {
       $("omTitle").textContent = `${o.plate}　${o.done_date}`;
+      $("orderModal").hidden = false;
       const body = $("omBody");
       body.innerHTML = "";
       const rows = [

@@ -229,6 +229,15 @@ begin
         having sum(-m.change) <> 0) x), '[]'::jsonb),
     'missing_cost', (
       select count(*) from public.owner_record_numbers(m0, (m1 - 1)) n where n.missing_cost > 0),
+    -- 這個月還沒過完：跟「去年同一段日期」比才公平（例如 11/1～11/25）
+    'ly_same', case when m0 = date_trunc('month', public.tw_now()::date)::date then (
+      select jsonb_build_object(
+        'to', (public.tw_now()::date - interval '1 year')::date,
+        'revenue', coalesce(sum(n.total), 0),
+        'cost', coalesce(sum(n.parts_cost + n.extra_cost), 0),
+        'visits', count(distinct (n.bike_id, n.done_date)))
+      from public.owner_record_numbers((m0 - interval '1 year')::date,
+                                       (public.tw_now()::date - interval '1 year')::date) n) end,
     'expenses', coalesce((
       select jsonb_agg(e order by e.date desc, e.id desc) from (
         select id, date, category, item, amount from public.owner_expenses
