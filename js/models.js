@@ -14,8 +14,8 @@
     },
     "三陽 SYM": {
       "100～115": ["WOO 115", "Mio 115"],
-      "125": ["JET SL SUPER C","JET SL 125","JET SL 158", "JETS", "JET SR", "迪爵 125", "全新迪爵 125", "4MICA 125", "CLBCU", "VIVO 活力", "FNX", "Z1 attila", "GT 125"],
-      "150～180": ["DRG", "DRG 2", "MMBCU","MMBCU 電推", "JET SL+ 158", "4MICA 150", "FIDDLE 150"],
+      "125": ["JET SL 125", "JETS", "JET SR", "迪爵 125", "全新迪爵 125", "4MICA 125", "CLBCU", "VIVO 活力", "FNX", "Z1 attila", "GT 125"],
+      "150～180": ["JET SL SUPER C","JET SL 158","DRG", "DRG 2", "MMBCU","MMBCU 電推", "JET SL+ 158", "4MICA 150", "FIDDLE 150"],
       "250 以上": ["Maxsym TL 500", "Joymax Z300"],
       "打檔車": ["野狼傳奇 125", "WOLF 125"]
     },

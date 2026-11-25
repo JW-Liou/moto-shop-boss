@@ -118,18 +118,27 @@ erDiagram
 ## 檔案結構
 
 ```
-index.html        登入
-app.html          主畫面：車牌查詢、工單、工作看板、預約、便條、來客名單
-customers.html    客戶查詢
-bikes.html        車輛總覽、營收與工單明細
-analytics.html    數據分析
-import.html       匯入舊 Excel、一鍵備份、垃圾桶、操作紀錄
-style.css         共用樣式
-ui.js             共用畫面效果（導覽列、數字動畫）
-config.js         Supabase 連線設定
-sw.js / manifest.json / icon-*.png   PWA
-sql/              老闆版_全新資料庫.sql：新的 Supabase 專案執行一次就建好全部
-docs/             README 截圖
+index.html          登入
+app.html            主畫面：車牌查詢、新車建檔、工單、工作看板、預約、便條、來客名單
+bikes.html          車輛總覽
+customers.html      客戶資料、合併、綁定 LINE
+inventory.html      庫存、進貨、叫貨、用量分析
+booking.html        線上預約設定、店家資訊
+analytics.html      數據分析
+import.html         匯入舊 Excel、一鍵備份、垃圾桶
+owner.html          老闆專區（隱藏，要密碼）
+customer/           客人網站（查保養紀錄、線上預約）
+style.css           共用樣式
+js/config.js        Supabase 連線設定
+js/ui.js            共用畫面效果（導覽列、提示、老闆專區入口）
+js/assistant.js     AI 小助理
+js/models.js        車型選單
+icons/              App 圖示
+sw.js / manifest.json   讓網站可以「安裝」成 App（這兩個要放在最外層）
+sql/                依編號 1→6 在 Supabase 執行；測試資料/ 是模擬資料和清除用的
+supabase/functions/ AI 小助理的後端
+scripts/backup.py   每天自動備份（.github/workflows/backup.yml 排程）
+docs/               README 截圖
 ```
 
 ## 測試

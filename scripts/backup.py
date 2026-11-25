@@ -48,8 +48,8 @@ TAIPEI = datetime.timezone(datetime.timedelta(hours=8))
 
 
 def read_config():
-    """從 config.js 讀 Supabase 網址和公開金鑰，不用另外再設定一次"""
-    text = Path(__file__).resolve().parent.parent.joinpath("config.js").read_text(encoding="utf-8")
+    """從 js/config.js 讀 Supabase 網址和公開金鑰，不用另外再設定一次"""
+    text = Path(__file__).resolve().parent.parent.joinpath("js", "config.js").read_text(encoding="utf-8")
     url = re.search(r'SUPABASE_URL\s*=\s*"([^"]+)"', text).group(1).rstrip("/")
     key = re.search(r'SUPABASE_KEY\s*=\s*"([^"]+)"', text).group(1)
     return url, key

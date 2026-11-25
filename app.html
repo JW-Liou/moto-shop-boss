@@ -6,17 +6,17 @@
   <title>竹北榮詮管理系統</title>
   <link rel="manifest" href="manifest.json">
   <meta name="theme-color" content="#0b1120">
-  <link rel="icon" href="icon-192.png">
-  <link rel="apple-touch-icon" href="icon-180.png">
+  <link rel="icon" href="icons/icon-192.png">
+  <link rel="apple-touch-icon" href="icons/icon-180.png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&display=swap">
   <link rel="stylesheet" href="style.css">
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="config.js"></script>
-  <script src="ui.js" defer></script>
-  <script src="assistant.js" defer></script>
-  <script src="models.js" defer></script>
+  <script src="js/config.js"></script>
+  <script src="js/ui.js" defer></script>
+  <script src="js/assistant.js" defer></script>
+  <script src="js/models.js" defer></script>
 </head>
 <body>
   <!-- 上方標題列 -->
@@ -1589,7 +1589,7 @@
       const { data, error } = await db.from("parts")
         .select("id, name, spec, category, unit, stock, safety_stock, price, active")
         .order("category").order("name").order("spec");
-      // 還沒在 Supabase 執行「老闆版_庫存.sql」：整個庫存功能先藏起來
+      // 還沒在 Supabase 執行「sql/2_庫存.sql」：整個庫存功能先藏起來
       if (error) {
         document.getElementById("useParts").hidden = true;
         document.getElementById("lowStock").hidden = true;
@@ -2006,7 +2006,7 @@
       const { error } = await db.from("service_records").update({ notified_at: new Date().toISOString() }).eq("id", id);
       if (error) {
         toast(/notified_at/.test(error.message)
-          ? "通知時間沒有記下來：請先在 Supabase 執行「老闆版_全新資料庫.sql」"
+          ? "通知時間沒有記下來：請先在 Supabase 執行「sql/1_全新資料庫.sql」"
           : "通知時間沒有記下來：" + error.message, "error");
         return;
       }
