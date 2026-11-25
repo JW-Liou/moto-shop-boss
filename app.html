@@ -144,10 +144,11 @@
             </select>
             <input id="tempName" class="temp-name" placeholder="品名，例如：右後照鏡、烤漆">
             <input id="tempQty" type="number" min="1" value="1" aria-label="數量">
-            <input id="tempPrice" type="number" min="0" placeholder="單價" aria-label="單價">
+            <input id="tempPrice" type="number" min="0" placeholder="收客人單價" aria-label="收客人單價">
+            <input id="tempCost" type="number" min="0" placeholder="成本（選填）" aria-label="成本" title="進這個零件或付給代工的錢，只有老闆專區看得到">
             <button class="btn-small" onclick="addTempPart()">加入</button>
           </div>
-          <p class="use-note" id="tempNote" hidden>臨時零件、代工、客人自備的不會扣庫存，只會記在這張工單的「零件」和金額裡。</p>
+          <p class="use-note" id="tempNote" hidden>臨時零件、代工、客人自備的不會扣庫存，只會記在這張工單的「零件」和金額裡。「成本」是進貨或付給代工的錢，只有老闆專區看得到，不知道可以空著。</p>
           <ul class="use-list" id="useList"></ul>
         </div>
         <div class="form-actions">
@@ -1796,7 +1797,10 @@
       const qty = Number(document.getElementById("tempQty").value);
       const priceText = document.getElementById("tempPrice").value.trim();
       const price = Number(priceText) || 0;
+      const costText = document.getElementById("tempCost").value.trim();
+      const cost = costText === "" ? null : Number(costText);
       if (!name) return alert("請填品名");
+      if (cost != null && !(cost >= 0)) return alert("成本不能是負的");
       if (!Number.isInteger(qty) || qty <= 0) return alert("數量要是大於 0 的整數");
       if (price < 0) return alert("單價不能是負的");
       if (!priceText && kind !== "客人自備" && !confirm(`「${name}」沒有填單價，金額不會加上去，確定嗎？`)) return;
@@ -1805,9 +1809,9 @@
       if (kind === "臨時零件" && inStock.length &&
           !confirm(`庫存裡有「${inStock.slice(0, 3).map(partLabel).join("、")}」。\n用庫存的要從上面選才會扣庫存。\n\n確定這個是臨時叫的、不扣庫存嗎？`)) return;
 
-      usedParts.push({ temp: true, kind, name, qty, price });
+      usedParts.push({ temp: true, kind, name, qty, price, cost });
       addAmount(price * qty);
-      ["tempName", "tempPrice"].forEach(id => (document.getElementById(id).value = ""));
+      ["tempName", "tempPrice", "tempCost"].forEach(id => (document.getElementById(id).value = ""));
       document.getElementById("tempQty").value = 1;
       refreshPartHints();
     }
@@ -1859,6 +1863,14 @@
 
     // 工單存好之後扣庫存（臨時零件、代工、客人自備的不扣）
     async function deductUsedParts(recordId) {
+      // 臨時零件、代工：記下收多少、成本多少（老闆專區算每張單的毛利用；還沒執行新版 SQL 就略過）
+      const extras = usedParts.filter(u => u.temp);
+      if (extras.length) {
+        await db.rpc("add_record_extras", {
+          p_record_id: recordId,
+          p_items: extras.map(u => ({ kind: u.kind, name: u.name, qty: u.qty, sale_price: u.price, unit_cost: u.cost }))
+        });
+      }
       const stock = usedParts.filter(u => !u.temp);
       if (stock.length) {
         const rows = stock.map(u => ({ part_id: u.part.id, change: -u.qty, reason: "工單使用", record_id: recordId }));

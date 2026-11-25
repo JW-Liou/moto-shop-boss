@@ -77,20 +77,7 @@
       <ul class="list" id="trashList"><li class="empty">讀取中…</li></ul>
     </section>
 
-    <!-- 操作紀錄：什麼時間、用哪種裝置、改了什麼 -->
-    <section class="card" id="log">
-      <div class="card-head">
-        <h2>操作紀錄</h2>
-        <select id="logType" onchange="loadLog()" class="log-type">
-          <option value="">全部</option>
-          <option value="UPDATE">只看修改</option>
-          <option value="DELETE">只看刪除</option>
-          <option value="INSERT">只看新增</option>
-        </select>
-      </div>
-      <p class="info">最近 100 筆。全店共用一個帳號，所以只看得出是用哪一種裝置操作的。</p>
-      <ul class="list" id="logList"><li class="empty">讀取中…</li></ul>
-    </section>
+    <!-- 操作紀錄移到老闆專區了（只有老闆看得到） -->
 
   </main>
 
@@ -325,7 +312,6 @@
         return;
       }
       loadTrash();
-      loadLog();
     }
 
     // ===== 一鍵備份 =====
@@ -579,10 +565,11 @@
       }
       msg.textContent = `已救回 ${items.length} 筆資料。`;
       loadTrash();
-      loadLog();
     }
 
+    // 操作紀錄移到老闆專區；這裡留著舊函式不會被呼叫
     async function loadLog() {
+      if (!document.getElementById("logList")) return;
       const ul = document.getElementById("logList");
       const type = document.getElementById("logType").value;
       let q = db

@@ -44,24 +44,98 @@
           <label class="month-pick">月份 <input type="month" id="month" onchange="loadReport()"></label>
         </div>
         <div class="kpis" id="kpis"></div>
+        <p class="yoy" id="yoy"></p>
         <p class="owner-warn" id="warn" hidden></p>
         <h3>最近 12 個月</h3>
         <div class="trend" id="trend"></div>
-        <div class="trend-legend"><span class="l-rev">營收</span><span class="l-profit">毛利</span></div>
+        <div class="trend-legend"><span class="l-rev">營收</span><span class="l-profit">實際賺</span><span class="l-ly">去年同月營收</span></div>
       </section>
 
-      <div class="tabs" id="ownerTabs">
-        <button data-tab="parts" class="active">零件毛利</button>
+      <div class="tabs owner-tabs" id="ownerTabs">
+        <button data-tab="orders" class="active">工單毛利</button>
+        <button data-tab="parts">零件毛利</button>
+        <button data-tab="customers">大客戶</button>
+        <button data-tab="aging">庫存積壓</button>
+        <button data-tab="suppliers">廠商對帳</button>
         <button data-tab="costs">進價設定</button>
         <button data-tab="expenses">其他支出</button>
+        <button data-tab="log">操作紀錄</button>
         <button data-tab="settings">設定</button>
       </div>
 
+      <!-- 每張工單賺多少 -->
+      <section class="card tab-panel" id="panel-orders">
+        <div class="card-head">
+          <h2>每張工單賺多少</h2>
+          <select id="orderSort" onchange="renderOrders()">
+            <option value="profit">賺最少的排前面</option>
+            <option value="-profit">賺最多的排前面</option>
+            <option value="-total">金額最大的排前面</option>
+            <option value="missing">沒填成本的排前面</option>
+          </select>
+        </div>
+        <p class="info">這個月完成的工單。成本 = 庫存零件 × 進價 ＋ 臨時零件／代工的成本；工錢 = 工單金額 − 零件售價（估算）。點一列可以看明細、補填臨時零件和代工的成本。</p>
+        <div class="table-wrap"><table class="usage-table click-rows" id="ordersTable"></table></div>
+      </section>
+
       <!-- 這個月每個零件賺多少 -->
-      <section class="card tab-panel" id="panel-parts">
+      <section class="card tab-panel" id="panel-parts" hidden>
         <h2>這個月零件賺多少</h2>
         <p class="info">已完成的工單用掉的零件。售價用目前的售價估算，進價用「用掉那時候」的進價。</p>
         <div class="table-wrap"><table class="usage-table" id="partsTable"></table></div>
+      </section>
+
+      <!-- 大客戶 -->
+      <section class="card tab-panel" id="panel-customers" hidden>
+        <div class="card-head">
+          <h2>大客戶排行</h2>
+          <select id="custMonths" onchange="loadCustomers()">
+            <option value="12">最近 12 個月</option>
+            <option value="6">最近 6 個月</option>
+            <option value="3">最近 3 個月</option>
+            <option value="24">最近 24 個月</option>
+          </select>
+        </div>
+        <p class="info" id="custInfo"></p>
+        <div class="table-wrap"><table class="usage-table" id="custTable"></table></div>
+      </section>
+
+      <!-- 庫存積壓 -->
+      <section class="card tab-panel" id="panel-aging" hidden>
+        <div class="card-head">
+          <h2>庫存積壓</h2>
+          <select id="agingDays" onchange="renderAging()">
+            <option value="60">超過 60 天沒用到</option>
+            <option value="90" selected>超過 90 天沒用到</option>
+            <option value="180">超過 180 天沒用到</option>
+            <option value="0">全部有庫存的</option>
+          </select>
+        </div>
+        <p class="info" id="agingInfo"></p>
+        <div class="table-wrap"><table class="usage-table" id="agingTable"></table></div>
+      </section>
+
+      <!-- 廠商對帳 -->
+      <section class="card tab-panel" id="panel-suppliers" hidden>
+        <h2>廠商對帳</h2>
+        <p class="info">這個月每家廠商進了多少錢（進貨數量 × 進價）。月底跟廠商的帳單對一下，付款後按「已付款」。點廠商名字看每一筆進貨。</p>
+        <ul class="list" id="supList"></ul>
+      </section>
+
+      <!-- 操作紀錄 -->
+      <section class="card tab-panel" id="panel-log" hidden>
+        <div class="card-head">
+          <h2>操作紀錄</h2>
+          <select id="logType" onchange="loadLog()">
+            <option value="">全部</option>
+            <option value="UPDATE">只看修改</option>
+            <option value="DELETE">只看刪除</option>
+            <option value="INSERT">只看新增</option>
+          </select>
+        </div>
+        <p class="info">什麼時間、用哪種裝置、改了什麼。員工那邊已經看不到這裡了（垃圾桶還是可以用）。</p>
+        <ul class="list" id="logList"></ul>
+        <div class="form-actions"><button class="btn-small btn-plain" id="logMore" onclick="loadLog(true)" hidden>看更早的</button></div>
       </section>
 
       <!-- 進價設定 -->
@@ -78,7 +152,7 @@
       <!-- 其他支出 -->
       <section class="card tab-panel" id="panel-expenses" hidden>
         <h2>其他支出</h2>
-        <p class="info">代工費、房租、水電、薪資、工具…這些會從毛利扣掉，算出「這個月實際賺多少」。</p>
+        <p class="info">房租、水電、薪資、工具…這些會從毛利扣掉，算出「這個月實際賺多少」。<b>開工單時已經填了成本的代工、臨時零件，會自動算進去，不用再記一次。</b></p>
         <div class="form-grid">
           <label>日期<input type="date" id="exDate"></label>
           <label>類別
@@ -111,6 +185,17 @@
       </section>
     </div>
   </main>
+
+  <!-- 工單明細：補填臨時零件、代工成本 -->
+  <div class="modal" id="orderModal" hidden onclick="if (event.target === this) this.hidden = true">
+    <div class="modal-box">
+      <div class="modal-head">
+        <h2 id="omTitle">工單明細</h2>
+        <button class="btn-small" onclick="$('orderModal').hidden = true">關閉</button>
+      </div>
+      <div id="omBody"></div>
+    </div>
+  </div>
 
   <script>
     const $ = id => document.getElementById(id);
@@ -166,7 +251,9 @@
       $("lockBtn").hidden = true;
       $("lockView").hidden = false;
       // 把畫面上的數字清掉，避免別人看到
-      ["kpis", "trend", "partsTable", "costTable", "exList"].forEach(id => ($(id).innerHTML = ""));
+      ["kpis", "yoy", "trend", "partsTable", "costTable", "exList", "ordersTable", "custTable", "agingTable", "supList", "logList"]
+        .forEach(id => ($(id).innerHTML = ""));
+      $("orderModal").hidden = true;
       $("lockMsg").textContent = typeof message === "string" ? message : "";
     }
 
@@ -204,6 +291,9 @@
       if (!b) return;
       document.querySelectorAll("#ownerTabs button").forEach(x => x.classList.toggle("active", x === b));
       document.querySelectorAll(".tab-panel").forEach(p => (p.hidden = p.id !== "panel-" + b.dataset.tab));
+      if (b.dataset.tab === "customers") loadCustomers();
+      if (b.dataset.tab === "aging") loadAging();
+      if (b.dataset.tab === "log") loadLog();
     });
 
     // ===== 報表 =====
@@ -213,49 +303,92 @@
       try {
         report = await call("owner_report", { p_month: m ? m + "-01" : null });
       } catch (e) { return; }
-      const t = report.trend.find(x => x.month === report.month) || { revenue: 0, parts_cost: 0, expenses: 0 };
-      const gross = t.revenue - t.parts_cost;
-      const net = gross - t.expenses;
+      const cur = monthNumbers(report.month);
+      const ly = monthNumbers(lastYear(report.month));
 
       const kpis = $("kpis");
       kpis.innerHTML = "";
       [
-        ["營收", money(t.revenue), "已完成的工單"],
-        ["零件成本", money(t.parts_cost), "用掉的零件 × 進價"],
-        ["零件毛利", money(gross), "毛利率 " + pct(gross, t.revenue)],
-        ["其他支出", money(t.expenses), "代工、房租、水電…"],
-        ["實際賺", money(net), "淨利率 " + pct(net, t.revenue)],
-        ["庫存價值", money(report.stock_value), "現在倉庫裡的零件 × 進價"]
+        ["營收", money(cur.revenue), `${cur.orders} 張工單・${cur.visits} 位來客`],
+        ["成本", money(cur.cost), "零件 × 進價 ＋ 臨時零件、代工"],
+        ["毛利", money(cur.gross), "毛利率 " + pct(cur.gross, cur.revenue)],
+        ["其他支出", money(cur.expenses), "房租、水電、薪資…"],
+        ["實際賺", money(cur.net), "淨利率 " + pct(cur.net, cur.revenue)],
+        ["客單價", money(cur.visits ? cur.revenue / cur.visits : 0), "平均每位來客花多少"],
+        ["工錢收入", money(cur.labor), `占營收 ${pct(cur.labor, cur.revenue)}（估算）`],
+        ["庫存價值", money(report.stock_value), "倉庫裡的零件 × 進價"]
       ].forEach(([label, value, sub], i) => {
-        const k = el("div", "kpi" + (i === 4 ? (net >= 0 ? " good" : " bad") : ""));
+        const k = el("div", "kpi" + (i === 4 ? (cur.net >= 0 ? " good" : " bad") : ""));
         k.append(el("div", "kpi-label", label), el("div", "kpi-value", value), el("div", "kpi-sub", sub));
         kpis.appendChild(k);
       });
 
+      // 跟去年同月比
+      const yoy = $("yoy");
+      if (ly.revenue > 0) {
+        const diff = (a, b) => {
+          if (!b) return "-";
+          const v = Math.round((a - b) / Math.abs(b) * 1000) / 10;
+          return (v >= 0 ? "▲ " : "▼ ") + Math.abs(v) + "%";
+        };
+        yoy.innerHTML = "";
+        yoy.append(`跟去年 ${Number(report.month.slice(5))} 月比：`);
+        [["營收", cur.revenue, ly.revenue], ["來客", cur.visits, ly.visits], ["客單價", cur.visits ? cur.revenue / cur.visits : 0, ly.visits ? ly.revenue / ly.visits : 0], ["實際賺", cur.net, ly.net]]
+          .forEach(([name, a, b]) => {
+            const sp = el("span", "yoy-item " + (a >= b ? "up" : "down"), `${name} ${diff(a, b)}`);
+            sp.title = `今年 ${Math.round(a).toLocaleString()}，去年 ${Math.round(b).toLocaleString()}`;
+            yoy.appendChild(sp);
+          });
+      } else {
+        yoy.textContent = `去年 ${Number(report.month.slice(5))} 月還沒有資料，明年就能比較了。`;
+      }
+
       const w = [];
-      if (report.missing_cost) w.push(`這個月有 ${report.missing_cost} 種用掉的零件還沒填進價，零件成本會算得比較少`);
+      if (report.missing_cost) w.push(`這個月有 ${report.missing_cost} 張工單有零件、臨時零件或代工還沒填成本，毛利會算得比較高`);
       if (report.stock_no_cost) w.push(`還有 ${report.stock_no_cost} 種有庫存的零件沒填進價`);
       $("warn").hidden = !w.length;
-      $("warn").textContent = w.length ? "⚠ " + w.join("；") + "。請到「進價設定」補上。" : "";
+      $("warn").textContent = w.length ? "⚠ " + w.join("；") + "。請到「進價設定」或「工單毛利」補上。" : "";
 
       renderTrend();
       renderPartsProfit();
       renderExpenses();
+      loadOrders();
+      loadSuppliers();
     }
 
-    // 12 個月的長條圖（營收、毛利）
+    // 某個月的數字（從 24 個月的趨勢裡找）
+    function monthNumbers(month) {
+      const t = (report.trend || []).find(x => x.month === month) ||
+        { revenue: 0, parts_cost: 0, extra_cost: 0, parts_sales: 0, expenses: 0, orders: 0, visits: 0 };
+      const revenue = Number(t.revenue), cost = Number(t.parts_cost) + Number(t.extra_cost);
+      const expenses = Number(t.expenses);
+      return {
+        revenue, cost, expenses, orders: t.orders, visits: t.visits,
+        gross: revenue - cost, net: revenue - cost - expenses,
+        labor: revenue - Number(t.parts_sales)
+      };
+    }
+    const lastYear = m => `${Number(m.slice(0, 4)) - 1}${m.slice(4)}`;
+
+    // 12 個月的長條圖（營收、實際賺；灰線 = 去年同月營收）
     function renderTrend() {
       const box = $("trend");
       box.innerHTML = "";
-      const max = Math.max(1, ...report.trend.map(t => t.revenue));
-      report.trend.forEach(t => {
-        const profit = t.revenue - t.parts_cost - t.expenses;
+      const months = report.trend.slice(-12);
+      const max = Math.max(1, ...months.map(t => Math.max(Number(t.revenue), monthNumbers(lastYear(t.month)).revenue)));
+      months.forEach(t => {
+        const n = monthNumbers(t.month), ly = monthNumbers(lastYear(t.month));
         const col = el("div", "trend-col" + (t.month === report.month ? " now" : ""));
-        col.title = `${t.month}\n營收 ${money(t.revenue)}\n零件成本 ${money(t.parts_cost)}\n其他支出 ${money(t.expenses)}\n實際賺 ${money(profit)}`;
+        col.title = `${t.month}\n營收 ${money(n.revenue)}\n成本 ${money(n.cost)}\n其他支出 ${money(n.expenses)}\n實際賺 ${money(n.net)}` +
+          (ly.revenue ? `\n去年同月營收 ${money(ly.revenue)}` : "");
         const bars = el("div", "trend-bars");
-        const r = el("div", "bar rev"); r.style.height = (t.revenue / max * 100) + "%";
-        const p = el("div", "bar profit"); p.style.height = (Math.max(0, profit) / max * 100) + "%";
+        const r = el("div", "bar rev"); r.style.height = (n.revenue / max * 100) + "%";
+        const p = el("div", "bar profit"); p.style.height = (Math.max(0, n.net) / max * 100) + "%";
         bars.append(r, p);
+        if (ly.revenue) {
+          const mark = el("div", "ly-mark"); mark.style.bottom = (ly.revenue / max * 100) + "%";
+          bars.appendChild(mark);
+        }
         col.append(bars, el("div", "trend-label", Number(t.month.slice(5)) + "月"));
         col.onclick = () => { $("month").value = t.month; loadReport(); };
         box.appendChild(col);
@@ -287,6 +420,248 @@
             if (i === 4 && each != null && each <= 0) td.className = "warn";
           });
       });
+    }
+
+    // ===== 工單毛利 =====
+    let orders = [];
+    async function loadOrders() {
+      try { orders = await call("owner_orders", { p_month: report.month + "-01" }); } catch (e) { return; }
+      renderOrders();
+    }
+
+    function renderOrders() {
+      const sort = $("orderSort").value;
+      const list = [...orders].sort((a, b) =>
+        sort === "profit" ? a.profit - b.profit :
+        sort === "-profit" ? b.profit - a.profit :
+        sort === "-total" ? b.total - a.total :
+        (b.missing_cost - a.missing_cost) || (a.profit - b.profit));
+      const table = $("ordersTable");
+      table.innerHTML = "";
+      const head = table.insertRow();
+      ["完成日", "車牌", "客人", "項目", "金額", "成本", "賺", "毛利率", "工錢（估）"].forEach(h => {
+        const th = document.createElement("th"); th.textContent = h; head.appendChild(th);
+      });
+      if (!list.length) {
+        const td = table.insertRow().insertCell(); td.colSpan = 9; td.textContent = "這個月還沒有完成的工單";
+        return;
+      }
+      list.forEach(o => {
+        const tr = table.insertRow();
+        [o.done_date.slice(5).replace("-", "/"), o.plate, o.customer || "", o.items || "", money(o.total),
+         money(o.cost) + (o.missing_cost ? `（${o.missing_cost} 項沒成本）` : ""),
+         money(o.profit), pct(o.profit, o.total), money(o.labor)]
+          .forEach((t, i) => {
+            const td = tr.insertCell(); td.textContent = t;
+            if (i === 3) td.className = "name";
+            if (i === 5 && o.missing_cost) td.className = "warn";
+            if (i === 6 && o.profit <= 0) td.className = "warn";
+          });
+        tr.onclick = () => openOrder(o);
+      });
+    }
+
+    function openOrder(o) {
+      $("omTitle").textContent = `${o.plate}　${o.done_date}`;
+      const body = $("omBody");
+      body.innerHTML = "";
+      const rows = [
+        ["客人", o.customer || "-"], ["項目", o.items || "-"], ["工單金額", money(o.total)],
+        ["零件售價（估）", money(o.parts_sales)], ["工錢（估）", money(o.labor)],
+        ["成本", money(o.cost)], ["這張賺", money(o.profit) + `（${pct(o.profit, o.total)}）`]
+      ];
+      const dl = el("dl", "om-dl");
+      rows.forEach(([k, v]) => dl.append(el("dt", "", k), el("dd", "", v)));
+      body.appendChild(dl);
+      body.appendChild(el("h3", "", "臨時零件、代工"));
+      if (!o.extras || !o.extras.length) {
+        body.appendChild(el("p", "info", "這張工單沒有臨時零件或代工。庫存零件的進價在「進價設定」填。"));
+        return;
+      }
+      o.extras.forEach(x => {
+        const row = el("div", "om-extra");
+        row.append(el("span", "", `【${x.kind}】${x.name} ×${x.qty}　收 ${money(x.sale_price * x.qty)}`));
+        if (x.kind === "客人自備") {
+          row.append(el("span", "info", "客人自備，沒有成本"));
+        } else {
+          const input = el("input");
+          input.type = "number"; input.min = 0; input.className = "cost-input";
+          input.placeholder = "成本單價"; input.value = x.unit_cost ?? "";
+          const save = el("button", "btn-small", "儲存");
+          save.onclick = async () => {
+            const v = input.value === "" ? null : Number(input.value);
+            if (v != null && !(v >= 0)) return toast("成本不合理", "error");
+            try { await call("owner_set_extra_cost", { p_id: x.id, p_cost: v }); } catch (e) { return; }
+            toast("成本已儲存");
+            $("orderModal").hidden = true;
+            loadReport();
+          };
+          row.append(input, save);
+        }
+        body.appendChild(row);
+      });
+    }
+
+    // ===== 大客戶 =====
+    async function loadCustomers() {
+      let d;
+      try { d = await call("owner_customers", { p_months: Number($("custMonths").value) }); } catch (e) { return; }
+      const top = d.top || [];
+      const share = top.reduce((s, c) => s + Number(c.spent), 0);
+      $("custInfo").textContent = `${d.since.replace(/-/g, "/")} 到今天，共 ${d.total_customers} 位客人消費 ${money(d.total_spent)}。` +
+        (top.length ? `前 ${top.length} 名佔了 ${pct(share, d.total_spent)}。逢年過節可以特別照顧他們。` : "");
+      const table = $("custTable");
+      table.innerHTML = "";
+      const head = table.insertRow();
+      ["#", "客人", "車牌", "來店次數", "總共花", "平均每次", "最後一次來"].forEach(h => {
+        const th = document.createElement("th"); th.textContent = h; head.appendChild(th);
+      });
+      top.forEach((c, i) => {
+        const tr = table.insertRow();
+        const days = Math.floor((Date.now() - new Date(c.last_visit)) / 864e5);
+        [i + 1, c.name || "未填姓名", c.plates || "", c.visits + " 次", money(c.spent), money(c.spent / Math.max(1, c.visits)),
+         `${c.last_visit.replace(/-/g, "/")}（${days} 天前）`]
+          .forEach((t, j) => {
+            const td = tr.insertCell(); td.textContent = t;
+            if (j === 1) td.className = "name";
+            if (j === 6 && days > 180) td.className = "warn";
+          });
+      });
+    }
+
+    // ===== 庫存積壓 =====
+    let aging = [];
+    async function loadAging() {
+      try { aging = await call("owner_aging"); } catch (e) { return; }
+      renderAging();
+    }
+
+    function renderAging() {
+      const limit = Number($("agingDays").value);
+      const now = Date.now();
+      const list = aging.map(p => {
+        const ref = p.last_used || p.first_move;
+        const days = ref ? Math.floor((now - new Date(ref)) / 864e5) : null;
+        return { ...p, days };
+      }).filter(p => !limit || p.days == null || p.days >= limit);
+      const value = list.reduce((s, p) => s + Number(p.value || 0), 0);
+      $("agingInfo").textContent = list.length
+        ? `${list.length} 種零件、大約 ${money(value)} 的錢放在倉庫裡沒在動。可以少叫一點、或做促銷消化掉。`
+        : "沒有放很久沒用的零件，庫存很健康 👍";
+      const table = $("agingTable");
+      table.innerHTML = "";
+      const head = table.insertRow();
+      ["零件", "庫存", "進價", "壓了多少錢", "最後一次用掉", "幾天沒用"].forEach(h => {
+        const th = document.createElement("th"); th.textContent = h; head.appendChild(th);
+      });
+      list.forEach(p => {
+        const tr = table.insertRow();
+        [partName(p) + (p.active ? "" : "（停用）"), `${p.stock}${p.unit}`, p.cost != null ? money(p.cost) : "未填",
+         p.value != null ? money(p.value) : "-",
+         p.last_used ? new Date(p.last_used).toLocaleDateString("zh-TW") : "從來沒用過",
+         p.days == null ? "-" : p.days + " 天"]
+          .forEach((t, i) => {
+            const td = tr.insertCell(); td.textContent = t;
+            if (i === 0) td.className = "name";
+            if (i === 2 && p.cost == null) td.className = "warn";
+          });
+      });
+    }
+
+    // ===== 廠商對帳 =====
+    async function loadSuppliers() {
+      let list;
+      try { list = await call("owner_suppliers", { p_month: report.month + "-01" }); } catch (e) { return; }
+      const ul = $("supList");
+      ul.innerHTML = "";
+      if (!list.length) return ul.appendChild(el("li", "empty", `${report.month.replace("-", "/")} 沒有進貨紀錄`));
+      list.forEach(s => {
+        const li = el("li", "sup-li");
+        const main = el("div", "main");
+        const title = el("div", "reveal", `${s.name}　${s.deliveries} 次進貨`);
+        title.title = "看每一筆進貨";
+        const detail = el("div", "sup-detail");
+        detail.hidden = true;
+        s.items.forEach(it => detail.appendChild(el("div", "sub",
+          `${it.date.slice(5).replace("-", "/")}　${it.part} ×${it.qty}${it.unit}` +
+          (it.unit_cost != null ? `　@${money(it.unit_cost)} = ${money(it.unit_cost * it.qty)}` : "　（沒有進價）") +
+          (it.order_id ? `　叫貨單 #${it.order_id}` : ""))));
+        title.onclick = () => (detail.hidden = !detail.hidden);
+        main.append(title, el("div", "sub", (s.no_cost ? `⚠ ${s.no_cost} 筆沒有進價，金額不完整` : "") +
+          (s.paid ? `${s.no_cost ? "・" : ""}已付款 ${money(s.paid.amount)}（${new Date(s.paid.paid_at).toLocaleDateString("zh-TW")}）` : "")), detail);
+        const amount = el("b", "money", money(s.amount));
+        const btn = el("button", "btn-small " + (s.paid ? "btn-plain" : ""), s.paid ? "改成未付" : "已付款");
+        btn.onclick = async () => {
+          let amt = null;
+          if (!s.paid) {
+            const v = prompt(`${s.name} ${report.month.replace("-", "/")} 付了多少？`, Math.round(Number(s.amount) || 0));
+            if (v === null) return;
+            amt = Number(v);
+            if (!(amt >= 0)) return toast("金額不對", "error");
+          }
+          try { await call("owner_supplier_paid", { p_supplier_id: s.id, p_month: report.month + "-01", p_amount: amt }); } catch (e) { return; }
+          loadSuppliers();
+        };
+        li.append(main, amount, btn);
+        ul.appendChild(li);
+      });
+    }
+
+    // ===== 操作紀錄 =====
+    const TABLE_LABEL = { customers: "客戶", bikes: "車輛", service_records: "工單", appointments: "預約", parts: "零件", suppliers: "廠商" };
+    const ACTION_LABEL = { INSERT: "新增", UPDATE: "修改", DELETE: "刪除", RESTORE: "救回" };
+    const FIELD_LABEL = {
+      name: "姓名", phone: "電話", note: "備註", plate: "車牌", model: "車型", year: "年份", mileage: "里程",
+      date: "日期", items: "項目", parts: "零件", total: "金額", status: "狀態", next_service_km: "下次保養里程",
+      completed_at: "完成時間", time: "時間", source: "來源", notified_at: "通知時間", spec: "規格", category: "分類",
+      unit: "單位", stock: "庫存", safety_stock: "安全庫存", price: "售價", active: "使用中", seen_at: "店家看過"
+    };
+    const SKIP = new Set(["id", "created_at", "phone_digits", "seen_at"]);
+    let logRows = [];
+
+    function logDescribe(l) {
+      const d = l.new_data || l.old_data || {};
+      switch (l.table_name) {
+        case "customers": return d.name || "未填姓名";
+        case "bikes": return `${d.plate}　${d.model || ""}`;
+        case "service_records": return `${l.plate || "（車輛已刪除）"}　${d.date || ""}　${d.items || ""}`;
+        case "appointments": return [d.date, (d.time || "").slice(0, 5), d.plate, d.name].filter(Boolean).join("　");
+        case "parts": return partName(d);
+        case "suppliers": return d.name || "";
+        default: return "";
+      }
+    }
+    function logValue(k, v) {
+      if (v === null || v === undefined || v === "") return "空白";
+      if (k === "total" || k === "price") return money(v);
+      if (k === "completed_at" || k === "notified_at") return new Date(v).toLocaleString("zh-TW", { hour12: false });
+      return String(v);
+    }
+
+    async function loadLog(more = false) {
+      const before = more && logRows.length ? logRows[logRows.length - 1].at : null;
+      let data;
+      try { data = await call("owner_log", { p_action: $("logType").value || null, p_before: before }); } catch (e) { return; }
+      logRows = more ? logRows.concat(data) : data;
+      const ul = $("logList");
+      if (!more) ul.innerHTML = "";
+      if (!logRows.length) ul.appendChild(el("li", "empty", "還沒有紀錄"));
+      data.forEach(l => {
+        const li = el("li");
+        const main = el("div", "main");
+        main.append(el("div", "", `${TABLE_LABEL[l.table_name] || l.table_name}：${logDescribe(l)}`));
+        if (l.action === "UPDATE" && l.old_data && l.new_data) {
+          const diff = Object.keys(l.new_data)
+            .filter(k => !SKIP.has(k) && JSON.stringify(l.old_data[k]) !== JSON.stringify(l.new_data[k]))
+            .map(k => k === "customer_id" ? "換了車主" : k === "bike_id" ? "換了車輛"
+              : `${FIELD_LABEL[k] || k}：${logValue(k, l.old_data[k])} → ${logValue(k, l.new_data[k])}`);
+          if (diff.length) main.append(el("div", "log-diff", diff.join("；")));
+        }
+        main.append(el("div", "sub", `${new Date(l.at).toLocaleString("zh-TW", { hour12: false })}・${l.device || "不明裝置"}` + (l.restored_at ? "・已救回" : "")));
+        li.append(el("span", "badge " + ({ INSERT: "done", UPDATE: "doing", DELETE: "todo", RESTORE: "done" }[l.action] || ""), ACTION_LABEL[l.action] || l.action), main);
+        ul.appendChild(li);
+      });
+      $("logMore").hidden = data.length < 100;
     }
 
     // ===== 進價設定 =====
@@ -396,10 +771,15 @@
     function exportExcel() {
       if (!report || typeof XLSX === "undefined") return toast("Excel 工具還沒載入，請稍後再試", "error");
       const wb = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(report.trend.map(t => ({
-        月份: t.month, 營收: t.revenue, 零件成本: Number(t.parts_cost), 零件毛利: t.revenue - t.parts_cost,
-        其他支出: Number(t.expenses), 實際賺: t.revenue - t.parts_cost - t.expenses
-      }))), "每月");
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(report.trend.map(t => {
+        const n = monthNumbers(t.month);
+        return { 月份: t.month, 營收: n.revenue, 成本: n.cost, 毛利: n.gross, 其他支出: n.expenses, 實際賺: n.net,
+                 工單數: t.orders, 來客: t.visits, 客單價: t.visits ? Math.round(n.revenue / t.visits) : 0, 工錢估算: n.labor };
+      })), "每月");
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(orders.map(o => ({
+        完成日: o.done_date, 車牌: o.plate, 客人: o.customer, 項目: o.items, 金額: Number(o.total),
+        成本: Number(o.cost), 賺: Number(o.profit), 工錢估算: Number(o.labor), 沒填成本: o.missing_cost
+      }))), "工單毛利");
       XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(report.parts.map(p => ({
         零件: partName(p), 用量: p.qty, 售價: p.price, 進價: p.cost, 這個月賺: Number(p.profit)
       }))), "零件毛利");

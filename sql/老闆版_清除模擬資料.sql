@@ -35,6 +35,9 @@ begin
   if to_regclass('public.owner_expenses') is not null then
     truncate table public.owner_expenses, public.deleted_stock_moves restart identity;
   end if;
+  if to_regclass('public.record_extras') is not null then
+    truncate table public.record_extras, public.owner_supplier_payments restart identity;
+  end if;
 end $$;
 
 -- 確認：前 6 個都應該是 0，員工名單至少 1
