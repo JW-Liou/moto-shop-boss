@@ -31,7 +31,7 @@
       <h2>專區</h2>
       <p class="info">請輸入密碼。</p>
       <form onsubmit="event.preventDefault(); unlock()">
-        <input type="password" id="pin" autocomplete="current-password" placeholder="老闆密碼">
+        <input type="password" id="pin" autocomplete="current-password" placeholder="密碼">
         <button class="btn" type="submit">開鎖</button>
       </form>
       <p class="msg" id="lockMsg"></p>
@@ -225,7 +225,7 @@
         <h3>匯出</h3>
         <p class="info">把這個月的報表、零件毛利、其他支出存成 Excel。<b>這些資料不在每日自動備份裡</b>，建議每個月匯出一次自己留著。</p>
         <button class="btn" onclick="exportExcel()">匯出這個月的 Excel</button>
-        <h3>更換老闆密碼</h3>
+        <h3>更換密碼</h3>
         <div class="form-grid">
           <label>舊密碼<input type="password" id="oldPin" autocomplete="current-password"></label>
           <label>新密碼（6 個字以上）<input type="password" id="newPin" autocomplete="new-password"></label>
@@ -283,11 +283,11 @@
     async function unlock() {
       $("lockMsg").textContent = "";
       const pin = $("pin").value;
-      if (!pin) return ($("lockMsg").textContent = "請輸入老闆密碼");
+      if (!pin) return ($("lockMsg").textContent = "請輸入密碼");
       const { data, error } = await db.rpc("owner_unlock", { p_pin: pin });
       $("pin").value = "";
       if (error) return ($("lockMsg").textContent = friendly(error));
-      if (!data) return ($("lockMsg").textContent = "老闆密碼不對（錯 5 次會鎖 15 分鐘）");
+      if (!data) return ($("lockMsg").textContent = "密碼不對（錯 5 次會鎖 15 分鐘）");
       token = data;
       try { sessionStorage.setItem(KEY, token); } catch (e) { /* 存不了就算了 */ }
       showOwner();
