@@ -341,7 +341,7 @@
         <button class="btn-small" onclick="closeVisitors()">關閉</button>
       </div>
       <p class="info" id="visitSub">讀取中…</p>
-      <input id="visitFilter" placeholder="搜尋車牌" oninput="renderVisitors()">
+      <input id="visitFilter" placeholder="搜尋車牌、車型、車主、項目" oninput="renderVisitors()">
       <div id="visitList"></div>
       <p class="info">點一下那台車，就會打開它的資料；電話點一下才會顯示完整號碼。</p>
     </div>
@@ -1545,9 +1545,12 @@
     const partsForItem = item => stockParts.filter(p => p.active && partMatchesItem(p, item));
 
     // 零件規格寫的車型跟這台車一樣（例如空濾「勁戰六代」）
+    // 零件適不適合這台車：看「規格」，規格空白的話看品名（例如品名直接打「皮帶 JET SR」）
     function fitsBike(p) {
       const m = norm(currentBike && currentBike.model), sp = norm(p.spec);
-      return m.length >= 2 && sp.length >= 2 && (m.includes(sp) || sp.includes(m));
+      if (m.length < 2) return false;
+      if (sp.length >= 2) return m.includes(sp) || sp.includes(m);
+      return norm(p.name).includes(m);
     }
 
     // 「項目」欄裡有哪些常用項目（「換機油、齒輪油」→ 機油、齒輪油）
@@ -1744,7 +1747,7 @@
     // 防呆：選的零件跟車型對不上（例如 DRG 選到 JET SL 的空濾）、同一個項目選了兩種
     function checkPartFits(p, item) {
       const siblings = partsForItem(item);
-      if (!fitsBike(p) && siblings.some(fitsBike) && norm(p.spec)) {
+      if (!fitsBike(p) && siblings.some(fitsBike) && (norm(p.spec) || norm(p.name) !== norm(item))) {
         const right = siblings.filter(fitsBike).map(partLabel).join("、");
         if (!confirm(`「${partLabel(p)}」看起來不是這台車（${currentBike.model}）用的。\n符合車型的是：${right}\n\n確定要用「${partLabel(p)}」嗎？`)) return false;
       }
