@@ -1081,3 +1081,7 @@ a.btn-small { text-decoration: none; }
   .mp-box { border-radius: 16px 16px 0 0; max-height: 85vh; }
   .mp-head { flex-wrap: wrap; }
 }
+
+/* 進價設定：分類按鈕上的「沒填進價」數字 */
+#costCats { margin: 0 0 10px; }
+.cat-miss { display: inline-block; margin-left: 5px; min-width: 18px; padding: 0 5px; border-radius: 999px; background: #dc2626; color: #fff; font-size: 12px; line-height: 18px; text-align: center; font-weight: 700; }

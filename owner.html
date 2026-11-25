@@ -180,6 +180,7 @@
         </div>
         <p class="info">填每個零件「跟廠商買的價格」（一個的價錢）。改進價不會影響以前的毛利，只影響之後用掉的。</p>
         <p class="owner-warn" id="costMissing" hidden></p>
+        <div class="chips cat-chips" id="costCats"></div>
         <div class="filter-bar">
           <input id="costSearch" class="grow" placeholder="搜尋品名、規格、分類" oninput="renderCosts()">
           <label class="check"><input type="checkbox" id="costOnlyMissing" onchange="renderCosts()"> 只看還沒填進價的</label>
@@ -807,7 +808,22 @@
     }
 
     // ===== 進價設定 =====
-    let costParts = [];
+    let costParts = [], costCat = "";
+    // 分類按鈕（跟庫存一樣），有沒填進價的分類會標紅點數字
+    function renderCostCats() {
+      const box = $("costCats");
+      box.innerHTML = "";
+      const cats = [...new Set(costParts.map(p => p.category || "其他"))];
+      if (costCat && !cats.includes(costCat)) costCat = "";
+      ["", ...cats].forEach(c => {
+        const inCat = costParts.filter(p => !c || (p.category || "其他") === c);
+        const miss = inCat.filter(p => p.cost == null).length;
+        const b = el("button", c === costCat ? "active" : "", `${c || "全部"} ${inCat.length}`);
+        if (miss) { const m = el("span", "cat-miss", miss); m.title = `${miss} 種沒填進價`; b.appendChild(m); }
+        b.onclick = () => { costCat = c; renderCosts(); };
+        box.appendChild(b);
+      });
+    }
     async function loadCosts() {
       try { costParts = await call("owner_parts"); } catch (e) { return; }
       renderCosts();
@@ -816,6 +832,7 @@
 
     function renderCosts() {
       const q = $("costSearch").value.trim();
+      renderCostCats();
       const table = $("costTable");
       table.innerHTML = "";
       const head = table.insertRow();
@@ -829,7 +846,8 @@
       const onlyMissing = $("costOnlyMissing").checked;
       const list = costParts.filter(p =>
         (!q || partName(p).toLowerCase().includes(q.toLowerCase()) || (p.category || "").includes(q)) &&
-        (!onlyMissing || p.cost == null));
+        (!onlyMissing || p.cost == null) &&
+        (!costCat || (p.category || "其他") === costCat));
       if (!list.length) {
         const td = table.insertRow().insertCell(); td.colSpan = 7; td.textContent = "沒有符合的零件";
       }
