@@ -1037,3 +1037,13 @@ a.btn-small { text-decoration: none; }
   .owner-summary { grid-template-columns: 1fr; }
   .owner-page .owner-summary .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
+
+/* ===== 老闆專區：查詢列 ===== */
+.filter-bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 8px 0; }
+.filter-bar label { display: inline-flex; flex-direction: row; align-items: center; gap: 6px; margin: 0; font-weight: 600; }
+.filter-bar input, .filter-bar select { width: auto; margin: 0; }
+.filter-bar .grow { flex: 1; min-width: 180px; }
+.filter-bar .btn-small { margin: 0; }
+.order-sum { margin: 4px 0; font-weight: 700; font-variant-numeric: tabular-nums; color: #0f172a; }
+.order-sum:empty { display: none; }
+.usage-table td.warn .cost-input { margin-right: 6px; }
