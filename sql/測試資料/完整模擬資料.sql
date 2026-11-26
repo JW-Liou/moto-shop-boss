@@ -457,6 +457,37 @@ begin
     ('DRG 空濾剩不多，順便叫', false, '模擬資料', now() - interval '1 day'),
     ('機油回收桶滿了，聯絡回收商', true, '模擬資料', now() - interval '2 days');
 
+  -- ===== 新車進貨與銷售（有跑過 sql/7_新車進貨與銷售.sql 才會放） =====
+  if to_regclass('public.new_bikes') is not null then
+    execute 'alter table public.new_bikes disable trigger log_changes';
+    insert into public.suppliers (name, phone, note, created_at)
+    values ('新車總代理（模擬）', '03-555-0505', '模擬資料：新車進貨', first_day);
+    insert into public.new_bikes (brand, model, color, year, frame_no, supplier_id, list_price, received_at, note)
+    select m.brand, m.model, (array['白', '黑', '消光灰', '藍', '紅'])[1 + g % 5], extract(year from dd.d)::int,
+           'SIM' || lpad(g::text, 6, '0'),
+           (select max(id) from public.suppliers where name = '新車總代理（模擬）'),
+           m.price, dd.d, '模擬資料'
+    from generate_series(1, 38) g
+    cross join lateral (select (first_day + (g - 1) * 19 + g % 7)::date as d) dd
+    cross join lateral (select * from (values ('三陽', 'JET SL 125', 86000), ('光陽', 'KRV', 99000),
+                                              ('山葉', '勁戰六代', 98000), ('三陽', 'DRG 2', 108000)) v(brand, model, price)
+                        offset (g % 4) limit 1) m
+    where dd.d <= public.tw_now()::date;
+    insert into public.new_bike_costs (new_bike_id, cost)
+    select id, round(list_price * 0.84, -2) from public.new_bikes where note = '模擬資料';
+    -- 進貨超過 40 天的大多賣掉了（隨便配一位模擬客人的車）
+    update public.new_bikes nb
+    set status = '已售', sold_at = least(nb.received_at + (10 + nb.id % 50)::int, public.tw_now()::date),
+        sale_price = nb.list_price - (nb.id % 3) * 2000, bike_id = sb.id, customer_id = sb.customer_id
+    from public.bikes sb
+    where nb.note = '模擬資料' and nb.received_at < public.tw_now()::date - 40 and nb.id % 6 <> 0
+      and sb.id = 1 + (nb.id * 13) % (select max(id) from public.bikes);
+    -- 留一台賣掉的沒填進價，測試提醒
+    delete from public.new_bike_costs
+    where new_bike_id = (select max(id) from public.new_bikes where status = '已售');
+    execute 'alter table public.new_bikes enable trigger log_changes';
+  end if;
+
   alter table public.customers       enable trigger log_changes;
   alter table public.bikes           enable trigger log_changes;
   alter table public.service_records enable trigger log_changes;

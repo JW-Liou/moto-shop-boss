@@ -135,7 +135,7 @@ js/assistant.js     AI 小助理
 js/models.js        車型選單
 icons/              App 圖示
 sw.js / manifest.json   讓網站可以「安裝」成 App（這兩個要放在最外層）
-sql/                依編號 1→6 在 Supabase 執行；測試資料/ 是模擬資料和清除用的
+sql/                依編號 1→7 在 Supabase 執行；測試資料/ 是模擬資料和清除用的
 supabase/functions/ AI 小助理的後端
 scripts/backup.py   每天自動備份（.github/workflows/backup.yml 排程）
 docs/               README 截圖

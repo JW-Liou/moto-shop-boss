@@ -65,6 +65,7 @@
       <div class="tabs owner-tabs" id="ownerTabs">
         <button data-tab="orders" class="active">工單毛利</button>
         <button data-tab="parts">零件毛利</button>
+        <button data-tab="newbikes">新車</button>
         <button data-tab="customers">大客戶</button>
         <button data-tab="aging">庫存積壓</button>
         <button data-tab="suppliers">廠商對帳</button>
@@ -79,6 +80,8 @@
         <div class="card-head">
           <h2>每張工單賺多少</h2>
           <select id="orderSort" onchange="renderOrders()">
+            <option value="-date">最新的排前面</option>
+            <option value="date">最舊的排前面</option>
             <option value="profit">賺最少的排前面</option>
             <option value="-profit">賺最多的排前面</option>
             <option value="-total">金額最大的排前面</option>
@@ -108,7 +111,19 @@
       <section class="card tab-panel" id="panel-parts" hidden>
         <h2>這個月零件賺多少</h2>
         <p class="info">已完成的工單用掉的零件。售價用目前的售價估算，進價用「用掉那時候」的進價。</p>
+        <div class="chips cat-chips" id="partsCats"></div>
         <div class="table-wrap"><table class="usage-table" id="partsTable"></table></div>
+      </section>
+
+      <!-- 新車 -->
+      <section class="card tab-panel" id="panel-newbikes" hidden>
+        <h2>新車</h2>
+        <p class="info">員工在「庫存 → 新車」進車、賣車。賣出的車算在賣出那個月的營收和成本裡（已經算進上面的「實際賺」）。進價只有這裡看得到、改得到。</p>
+        <div class="order-sum" id="nbSum"></div>
+        <h3>這個月賣出</h3>
+        <div class="table-wrap"><table class="usage-table" id="nbSoldTable"></table></div>
+        <h3>還在店裡</h3>
+        <div class="table-wrap"><table class="usage-table" id="nbStockTable"></table></div>
       </section>
 
       <!-- 大客戶 -->
@@ -302,7 +317,7 @@
       $("lockBtn").hidden = true;
       $("lockView").hidden = false;
       // 把畫面上的數字清掉，避免別人看到
-      ["kpis", "yoy", "heroValue", "heroFormula", "heroBar", "heroLegend", "heroFoot", "heroRate", "trend", "partsTable", "costTable", "exList", "ordersTable", "custTable", "agingTable", "supList", "logList", "pendingList", "orderSum"]
+      ["kpis", "yoy", "heroValue", "heroFormula", "heroBar", "heroLegend", "heroFoot", "heroRate", "trend", "partsTable", "costTable", "exList", "ordersTable", "custTable", "agingTable", "supList", "logList", "pendingList", "orderSum", "partsCats", "nbSum", "nbSoldTable", "nbStockTable"]
         .forEach(id => ($(id).innerHTML = ""));
       $("orderModal").hidden = true;
       $("lockMsg").textContent = typeof message === "string" ? message : "";
@@ -310,6 +325,9 @@
 
     function friendly(error) {
       const m = error.message || String(error);
+      if (/new_bike/i.test(m) && !/[一-鿿]/.test(m)) {
+        return "新車功能還沒啟用：請先在 Supabase 執行「sql/7_新車進貨與銷售.sql」。";
+      }
       if (/owner_|schema cache|does not exist/i.test(m) && !/[一-鿿]/.test(m)) {
         return "老闆專區還沒啟用：請先在 Supabase 執行「sql/4_老闆專區第一批.sql」。";
       }
@@ -345,6 +363,7 @@
       if (b.dataset.tab === "customers") loadCustomers();
       if (b.dataset.tab === "aging") loadAging();
       if (b.dataset.tab === "log") loadLog();
+      if (b.dataset.tab === "newbikes") loadNewBikes();
     });
 
     // ===== 報表 =====
@@ -379,16 +398,19 @@
         const sp = el("span", "lg " + c, `${t} ${pct(v, cur.revenue)}`);
         $("heroLegend").appendChild(sp);
       });
-      $("heroFoot").textContent = `倉庫裡的零件價值 ${money(report.stock_value)}（庫存 × 進價）`;
+      $("heroFoot").textContent = `倉庫裡的零件價值 ${money(report.stock_value)}（庫存 × 進價）` +
+        (report.bike_stock ? `；店裡還有 ${report.bike_stock} 台新車，進價共 ${money(report.bike_stock_value)}` : "");
 
       const kpis = $("kpis");
       kpis.innerHTML = "";
       [
-        ["營收", money(cur.revenue), `${cur.orders} 張工單・${cur.visits} 位來客`],
-        ["成本", money(cur.cost), "零件進價＋臨時零件、代工"],
+        ["營收", money(cur.revenue), cur.bikesSold
+          ? `維修 ${money(cur.service)}・新車 ${cur.bikesSold} 台 ${money(cur.bikeRev)}`
+          : `${cur.orders} 張工單・${cur.visits} 位來客`],
+        ["成本", money(cur.cost), cur.bikesSold ? `含新車進價 ${money(cur.bikeCost)}` : "零件進價＋臨時零件、代工"],
         ["毛利", money(cur.gross), "毛利率 " + pct(cur.gross, cur.revenue)],
         ["其他支出", money(cur.expenses), "房租、水電、薪資…"],
-        ["客單價", money(cur.visits ? cur.revenue / cur.visits : 0), "平均每位來客花多少"],
+        ["客單價", money(cur.visits ? cur.service / cur.visits : 0), "維修平均每位來客花多少"],
         ["工錢收入", money(cur.labor), `占營收 ${pct(cur.labor, cur.revenue)}（估算）`]
       ].forEach(([label, value, sub]) => {
         const k = el("div", "kpi");
@@ -417,15 +439,15 @@
       if (same && Number(same.revenue) > 0) {
         const to = same.to.slice(5).replace("-", "/").replace(/^0/, "");
         chips(`跟去年同期（${Number(report.month.slice(5))}/1～${to}）比：`, [
-          ["營收", cur.revenue, Number(same.revenue)],
+          ["營收", cur.revenue, Number(same.revenue) + Number(same.bike_revenue || 0)],
           ["來客", cur.visits, Number(same.visits)],
-          ["客單價", avg(cur.revenue, cur.visits), avg(Number(same.revenue), Number(same.visits))],
-          ["毛利", cur.gross, Number(same.revenue) - Number(same.cost)]
+          ["客單價", avg(cur.service, cur.visits), avg(Number(same.revenue), Number(same.visits))],
+          ["毛利", cur.gross, Number(same.revenue) + Number(same.bike_revenue || 0) - Number(same.cost) - Number(same.bike_cost || 0)]
         ]);
       } else if (ly.revenue > 0) {
         chips(`跟去年 ${Number(report.month.slice(5))} 月比：`, [
           ["營收", cur.revenue, ly.revenue], ["來客", cur.visits, ly.visits],
-          ["客單價", avg(cur.revenue, cur.visits), avg(ly.revenue, ly.visits)], ["實際賺", cur.net, ly.net]
+          ["客單價", avg(cur.service, cur.visits), avg(ly.service, ly.visits)], ["實際賺", cur.net, ly.net]
         ]);
       } else {
         yoy.textContent = `去年 ${Number(report.month.slice(5))} 月還沒有資料，明年就能比較了。`;
@@ -434,11 +456,13 @@
       const w = [];
       if (report.missing_cost) w.push(`這個月有 ${report.missing_cost} 張工單有零件、臨時零件或代工還沒填成本，毛利會算得比較高`);
       if (report.stock_no_cost) w.push(`還有 ${report.stock_no_cost} 種有庫存的零件沒填進價`);
+      if (report.bike_no_cost) w.push(`有 ${report.bike_no_cost} 台新車沒填進價（到「新車」分頁補）`);
       $("warn").hidden = !w.length;
       $("warn").textContent = w.length ? "⚠ " + w.join("；") + "。請到「進價設定」或「工單毛利」補上。" : "";
 
       renderTrend();
       renderPartsProfit();
+      if (ownerBikes.length) renderNewBikes();
       renderExpenses();
       setOrderMonth();
       loadOrders();
@@ -449,12 +473,15 @@
     function monthNumbers(month) {
       const t = (report.trend || []).find(x => x.month === month) ||
         { revenue: 0, parts_cost: 0, extra_cost: 0, parts_sales: 0, expenses: 0, orders: 0, visits: 0 };
-      const revenue = Number(t.revenue), cost = Number(t.parts_cost) + Number(t.extra_cost);
+      // 維修（工單）和新車分開算，再加起來；還沒跑新車 SQL 時新車都是 0
+      const service = Number(t.revenue), bikeRev = Number(t.bike_revenue || 0), bikeCost = Number(t.bike_cost || 0);
+      const revenue = service + bikeRev, cost = Number(t.parts_cost) + Number(t.extra_cost) + bikeCost;
       const expenses = Number(t.expenses);
       return {
         revenue, cost, expenses, orders: t.orders, visits: t.visits,
+        service, bikeRev, bikeCost, bikesSold: Number(t.bikes_sold || 0),
         gross: revenue - cost, net: revenue - cost - expenses,
-        labor: revenue - Number(t.parts_sales)
+        labor: service - Number(t.parts_sales)
       };
     }
     const lastYear = m => `${Number(m.slice(0, 4)) - 1}${m.slice(4)}`;
@@ -484,19 +511,44 @@
       });
     }
 
+    // 零件分類（跟庫存一樣），從零件資料讀
+    let partCats = null, partsCat = "";
+    async function loadPartCats() {
+      if (partCats) return;
+      const { data } = await db.from("parts").select("id, category");
+      partCats = {};
+      (data || []).forEach(p => (partCats[p.id] = p.category || "其他"));
+    }
+    const catOf = p => (partCats && partCats[p.id]) || "其他";
+
     function renderPartsProfit() {
+      if (!partCats) { loadPartCats().then(renderPartsProfit); return; }
+      const all = report.parts;
+      const cats = [...new Set(all.map(catOf))];
+      if (partsCat && !cats.includes(partsCat)) partsCat = "";
+      const box = $("partsCats");
+      box.innerHTML = "";
+      if (cats.length > 1) ["", ...cats].forEach(c => {
+        const inCat = all.filter(p => !c || catOf(p) === c);
+        const made = inCat.reduce((s, p) => s + Number(p.profit || 0), 0);
+        const b = el("button", c === partsCat ? "active" : "", `${c || "全部"} ${money(made)}`);
+        b.title = `${inCat.length} 種零件，這個月賺 ${money(made)}`;
+        b.onclick = () => { partsCat = c; renderPartsProfit(); };
+        box.appendChild(b);
+      });
+      const shown = all.filter(p => !partsCat || catOf(p) === partsCat);
       const table = $("partsTable");
       table.innerHTML = "";
       const head = table.insertRow();
       ["零件", "用量", "售價", "進價", "每個賺", "毛利率", "這個月賺"].forEach(h => {
         const th = document.createElement("th"); th.textContent = h; head.appendChild(th);
       });
-      if (!report.parts.length) {
+      if (!shown.length) {
         const td = table.insertRow().insertCell();
-        td.colSpan = 7; td.textContent = "這個月還沒有用掉零件的已完成工單";
+        td.colSpan = 7; td.textContent = all.length ? "這個分類這個月沒有用掉零件" : "這個月還沒有用掉零件的已完成工單";
         return;
       }
-      report.parts.forEach(p => {
+      shown.forEach(p => {
         const tr = table.insertRow();
         const each = p.cost != null ? p.price - p.cost : null;
         [partName(p), `${p.qty}${p.unit}`, money(p.price), p.cost != null ? money(p.cost) : "",
@@ -557,6 +609,8 @@
         ? `${filtered.length} 張工單　金額 ${money(sum("total"))}　成本 ${money(sum("cost"))}　賺 ${money(sum("profit"))}（${pct(sum("profit"), sum("total"))}）　工錢 ${money(sum("labor"))}`
         : "";
       const list = [...filtered].sort((a, b) =>
+        sort === "-date" ? (b.done_date.localeCompare(a.done_date) || b.id - a.id) :
+        sort === "date" ? (a.done_date.localeCompare(b.done_date) || a.id - b.id) :
         sort === "profit" ? a.profit - b.profit :
         sort === "-profit" ? b.profit - a.profit :
         sort === "-total" ? b.total - a.total :
@@ -980,13 +1034,88 @@
       lock(msg);
     }
 
+    // ===== 新車 =====
+    let ownerBikes = [];
+    async function loadNewBikes() {
+      try { ownerBikes = await call("owner_new_bikes"); } catch (e) { return; }
+      renderNewBikes();
+    }
+    function renderNewBikes() {
+      const m = report ? report.month : new Date().toLocaleDateString("sv-SE").slice(0, 7);
+      const name = b => [b.brand, b.model, b.color].filter(Boolean).join(" ");
+      const sold = ownerBikes.filter(b => b.status === "已售" && (b.sold_at || "").startsWith(m));
+      const stock = ownerBikes.filter(b => b.status === "在庫");
+      const rev = sold.reduce((s, b) => s + Number(b.sale_price || 0), 0);
+      const cost = sold.reduce((s, b) => s + Number(b.cost || 0), 0);
+      const noCost = sold.filter(b => b.cost == null).length;
+      $("nbSum").textContent = `${Number(m.slice(5))} 月賣出 ${sold.length} 台　營收 ${money(rev)}　進價 ${money(cost)}　賺 ${money(rev - cost)}（${pct(rev - cost, rev)}）` +
+        (noCost ? `　⚠ ${noCost} 台沒填進價` : "") +
+        `｜店裡還有 ${stock.length} 台，進價共 ${money(stock.reduce((s, b) => s + Number(b.cost || 0), 0))}`;
+
+      const costCell = (td, b) => {
+        if (b.cost != null) td.textContent = money(b.cost);
+        const input = el("input");
+        input.type = "number"; input.min = 0; input.className = "cost-input";
+        input.placeholder = b.cost != null ? "改進價" : "填進價";
+        const btn = el("button", "btn-small", "儲存");
+        const go = async () => {
+          if (input.value === "") return;
+          try { await call("owner_set_new_bike_cost", { p_id: b.id, p_cost: Number(input.value) }); } catch (e) { return; }
+          toast(`已儲存「${name(b)}」的進價`);
+          await loadNewBikes();
+          loadReport();
+        };
+        btn.onclick = go;
+        input.onkeydown = e => { if (e.key === "Enter") go(); };
+        if (b.cost == null) td.className = "warn";
+        td.append(input, btn);
+      };
+      const fill = (table, heads, rows, empty) => {
+        table.innerHTML = "";
+        const head = table.insertRow();
+        heads.forEach(h => { const th = document.createElement("th"); th.textContent = h; head.appendChild(th); });
+        if (!rows.length) { const td = table.insertRow().insertCell(); td.colSpan = heads.length; td.textContent = empty; }
+        return rows;
+      };
+      fill($("nbSoldTable"), ["賣出日", "車", "客人", "車牌", "賣價", "進價", "賺", "毛利率", "放了幾天"], sold, "這個月還沒有賣出新車")
+        .forEach(b => {
+          const tr = $("nbSoldTable").insertRow();
+          const earn = b.cost != null ? b.sale_price - b.cost : null;
+          [b.sold_at.replace(/-/g, "/"), name(b), b.customer || "", b.plate || "", money(b.sale_price), null,
+           earn != null ? money(earn) : "-", earn != null ? pct(earn, b.sale_price) : "-", b.days + " 天"]
+            .forEach((t, i) => {
+              const td = tr.insertCell();
+              if (i === 5) return costCell(td, b);
+              td.textContent = t;
+              if (i === 1) td.className = "name";
+              if (i === 6 && earn != null && earn <= 0) td.className = "warn";
+            });
+        });
+      fill($("nbStockTable"), ["進貨日", "車", "車架號", "廠商", "建議售價", "進價", "預計賺", "放了幾天"],
+        stock.sort((a, b) => b.days - a.days), "店裡沒有新車庫存")
+        .forEach(b => {
+          const tr = $("nbStockTable").insertRow();
+          const earn = b.cost != null && b.list_price != null ? b.list_price - b.cost : null;
+          [b.received_at.replace(/-/g, "/"), name(b), b.frame_no || "", b.supplier || "",
+           b.list_price != null ? money(b.list_price) : "", null, earn != null ? money(earn) : "-", b.days + " 天"]
+            .forEach((t, i) => {
+              const td = tr.insertCell();
+              if (i === 5) return costCell(td, b);
+              td.textContent = t;
+              if (i === 1) td.className = "name";
+              if (i === 7 && b.days > 90) td.className = "warn";
+            });
+        });
+    }
+
     function exportExcel() {
       if (!report || typeof XLSX === "undefined") return toast("Excel 工具還沒載入，請稍後再試", "error");
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(report.trend.map(t => {
         const n = monthNumbers(t.month);
         return { 月份: t.month, 營收: n.revenue, 成本: n.cost, 毛利: n.gross, 其他支出: n.expenses, 實際賺: n.net,
-                 工單數: t.orders, 來客: t.visits, 客單價: t.visits ? Math.round(n.revenue / t.visits) : 0, 工錢估算: n.labor };
+                 工單數: t.orders, 來客: t.visits, 客單價: t.visits ? Math.round(n.service / t.visits) : 0, 工錢估算: n.labor,
+                 新車台數: n.bikesSold, 新車營收: n.bikeRev, 新車成本: n.bikeCost };
       })), "每月");
       XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(orders.map(o => ({
         完成日: o.done_date, 車牌: o.plate, 客人: o.customer, 項目: o.items, 金額: Number(o.total),

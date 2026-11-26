@@ -1085,3 +1085,10 @@ a.btn-small { text-decoration: none; }
 /* 進價設定：分類按鈕上的「沒填進價」數字 */
 #costCats { margin: 0 0 10px; }
 .cat-miss { display: inline-block; margin-left: 5px; min-width: 18px; padding: 0 5px; border-radius: 999px; background: #dc2626; color: #fff; font-size: 12px; line-height: 18px; text-align: center; font-weight: 700; }
+
+/* 賣出新車：找舊客人 */
+.sell-results { max-height: 200px; overflow-y: auto; margin: 6px 0 10px; }
+.sell-results li { cursor: pointer; padding: 8px 10px; border-radius: 8px; }
+.sell-results li:hover { background: #eff6ff; }
+.sell-results li.picked { background: #dbeafe; font-weight: 700; box-shadow: inset 0 0 0 2px #60a5fa; }
+#sellWho { margin: 4px 0 10px; }

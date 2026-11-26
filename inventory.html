@@ -16,6 +16,7 @@
   <script src="js/config.js"></script>
   <script src="js/ui.js" defer></script>
   <script src="js/assistant.js" defer></script>
+  <script src="js/models.js" defer></script>
 </head>
 <body>
   <header class="topbar">
@@ -49,6 +50,7 @@
         <button data-tab="suppliers">廠商</button>
         <button data-tab="moves">進出紀錄</button>
         <button data-tab="usage">用量分析</button>
+        <button data-tab="newbikes">新車 <span id="tBikes">0</span></button>
       </div>
       <p class="msg" id="msg"></p>
     </section>
@@ -105,6 +107,20 @@
     </section>
 
     <!-- 5. 用量分析：每個零件每月用掉多少，建議安全庫存設多少 -->
+    <!-- 6. 新車 -->
+    <section class="card tab-panel" id="panel-newbikes" hidden>
+      <div class="card-head">
+        <h2>新車庫存</h2>
+        <button class="btn" onclick="openNewBike()">＋ 進新車</button>
+      </div>
+      <p class="info" id="nbInfo">一台一筆。賣出時會自動建立客戶和車輛資料，之後保養直接查車牌就有。進價只有老闆專區看得到。</p>
+      <div class="inv-tools">
+        <input id="nbQ" placeholder="搜尋車型、顏色、車架號、客人" oninput="renderNewBikes()">
+      </div>
+      <div class="chips cat-chips" id="nbChips"></div>
+      <ul class="list inv-list" id="nbList"><li class="empty">讀取中…</li></ul>
+    </section>
+
     <section class="card tab-panel" id="panel-usage" hidden>
       <div class="card-head">
         <h2>用量分析</h2>
@@ -144,6 +160,65 @@
     </div>
   </div>
   <datalist id="catList"></datalist>
+
+  <!-- 進新車／編輯新車 -->
+  <div class="modal" id="nbModal" hidden onclick="if (event.target === this) closeModals()">
+    <div class="modal-box">
+      <div class="modal-head">
+        <h2 id="nbTitle">進新車</h2>
+        <button class="btn-small" onclick="closeModals()">取消</button>
+      </div>
+      <div class="form-grid">
+        <label>廠牌<input id="nbBrand" list="brandList" placeholder="例如：三陽"></label>
+        <label>車型<input id="nbModel" data-model-picker placeholder="點一下選車型"></label>
+        <label>顏色<input id="nbColor" placeholder="例如：消光黑"></label>
+        <label>年份<input id="nbYear" type="number" min="1950" max="2100"></label>
+        <label>車架號碼<input id="nbFrame" placeholder="同一台不能進兩次"></label>
+        <label>引擎號碼（可不填）<input id="nbEngine"></label>
+        <label>跟哪家進的<select id="nbSupplier"></select></label>
+        <label>進貨日<input id="nbDate" type="date"></label>
+        <label>建議售價（元）<input id="nbListPrice" type="number" min="0"></label>
+        <label id="nbStatusWrap">狀態<select id="nbStatus"><option>在庫</option><option>退回</option></select></label>
+        <label id="nbCostWrap">進價（元，只有老闆看得到）<input id="nbCost" type="number" min="0"></label>
+      </div>
+      <p class="info" id="nbCostNote" hidden>進價只能在第一次進車時填；之後要改，請到老闆專區的「新車」。</p>
+      <label>備註<input id="nbNote"></label>
+      <div class="form-actions">
+        <button class="btn" onclick="saveNewBike()">儲存</button>
+        <button class="btn-small btn-danger" id="nbDelete" onclick="deleteNewBike()">刪除這台</button>
+      </div>
+    </div>
+  </div>
+  <datalist id="brandList"><option>三陽</option><option>光陽</option><option>山葉</option><option>台鈴</option><option>Gogoro</option><option>宏佳騰</option><option>PGO</option><option>本田</option><option>偉士牌</option></datalist>
+
+  <!-- 賣出新車 -->
+  <div class="modal" id="sellModal" hidden onclick="if (event.target === this) closeModals()">
+    <div class="modal-box">
+      <div class="modal-head">
+        <h2>賣出新車</h2>
+        <button class="btn-small" onclick="closeModals()">取消</button>
+      </div>
+      <p class="info" id="sellInfo"></p>
+      <div class="chips" id="sellWho">
+        <button class="active" data-who="new" type="button">新客人</button>
+        <button data-who="old" type="button">舊客人</button>
+      </div>
+      <div id="sellNew" class="form-grid">
+        <label>客人名字<input id="sellName"></label>
+        <label>電話<input id="sellPhone" inputmode="tel"></label>
+      </div>
+      <div id="sellOld" hidden>
+        <label>找客人（名字或電話）<input id="sellSearch" oninput="searchSellCustomer()" placeholder="至少打 2 個字"></label>
+        <ul class="list sell-results" id="sellResults"></ul>
+      </div>
+      <div class="form-grid">
+        <label>車牌<input id="sellPlate" placeholder="例如：ABC1234"></label>
+        <label>賣價（元）<input id="sellPrice" type="number" min="0"></label>
+        <label>賣出日<input id="sellDate" type="date"></label>
+      </div>
+      <div class="form-actions"><button class="btn" id="sellBtn" onclick="sellNewBike()">確定賣出</button></div>
+    </div>
+  </div>
   <datalist id="unitList"><option>瓶</option><option>顆</option><option>條</option><option>組</option><option>個</option><option>片</option></datalist>
 
   <!-- 進貨／用掉／盤點 -->
@@ -252,6 +327,7 @@
       $("kPending").textContent = orders.filter(x => x.status === "已叫貨").length;
       $("kSuppliers").textContent = suppliers.length;
 
+      loadNewBikes();
       renderCategories();
       renderParts();
       renderOrders();
@@ -265,6 +341,7 @@
       document.querySelectorAll(".tab-panel").forEach(p => p.hidden = p.id !== "panel-" + name);
       if (name === "moves") loadMoves();
       if (name === "usage") loadUsage();
+      if (name === "newbikes") loadNewBikes();
       history.replaceState(null, "", "?tab=" + name);
     }
     $("invTabs").addEventListener("click", e => {
@@ -788,9 +865,227 @@
     }
 
     function closeModals() {
-      ["partModal", "adjModal", "supModal", "orderMsgModal"].forEach(id => $(id).hidden = true);
+      ["partModal", "adjModal", "supModal", "orderMsgModal", "nbModal", "sellModal"].forEach(id => $(id).hidden = true);
     }
     document.addEventListener("keydown", e => { if (e.key === "Escape") closeModals(); });
+
+    // ===== 6. 新車 =====
+    let newBikes = [], nbStatus = "在庫", editingBike = null, sellingBike = null, sellCustomer = null;
+    const today = () => new Date().toLocaleDateString("sv-SE");
+    const bikeName = b => [b.brand, b.model, b.color].filter(Boolean).join(" ");
+    const won = n => n == null ? "" : "$" + Number(n).toLocaleString();
+
+    async function loadNewBikes() {
+      const { data, error } = await db.from("new_bikes")
+        .select("*, suppliers(name), customers(name, phone), bikes(plate)")
+        .order("received_at", { ascending: false }).order("id", { ascending: false });
+      if (error) {
+        $("tBikes").textContent = "-";
+        if (/new_bikes|does not exist|schema cache/i.test(error.message)) {
+          $("nbList").innerHTML = "";
+          $("nbList").appendChild(el("li", "empty", "還沒啟用新車：請先到 Supabase 的 SQL Editor 執行「sql/7_新車進貨與銷售.sql」。"));
+        }
+        return;
+      }
+      newBikes = data;
+      $("tBikes").textContent = newBikes.filter(b => b.status === "在庫").length;
+      renderNewBikes();
+    }
+
+    function renderNewBikes() {
+      const chips = $("nbChips");
+      chips.innerHTML = "";
+      [["在庫", "在庫"], ["已售", "已售"], ["退回", "退回"], ["", "全部"]].forEach(([v, t]) => {
+        const n = newBikes.filter(b => !v || b.status === v).length;
+        const b = el("button", v === nbStatus ? "active" : "", `${t} ${n}`);
+        b.onclick = () => { nbStatus = v; renderNewBikes(); };
+        chips.appendChild(b);
+      });
+      const q = $("nbQ").value.trim().toLowerCase();
+      const list = newBikes.filter(b => (!nbStatus || b.status === nbStatus) &&
+        (!q || [bikeName(b), b.frame_no, b.engine_no, b.customers && b.customers.name, b.bikes && b.bikes.plate]
+          .some(v => (v || "").toLowerCase().includes(q))));
+      const ul = $("nbList");
+      ul.innerHTML = "";
+      if (!list.length) {
+        ul.appendChild(el("li", "empty", newBikes.length ? "沒有符合的新車" : "還沒有新車，按右上角「＋ 進新車」開始"));
+        return;
+      }
+      list.forEach(b => {
+        const li = el("li", b.status === "在庫" ? "" : "faded");
+        const main = el("div", "main");
+        main.append(el("div", "part-name", bikeName(b) + (b.year ? `（${b.year}）` : "")));
+        const days = Math.round((new Date(b.sold_at || today()) - new Date(b.received_at)) / 864e5);
+        const sub = b.status === "已售"
+          ? [`${b.sold_at.replace(/-/g, "/")} 賣出`, b.customers ? b.customers.name : "", b.bikes ? b.bikes.plate : "", `賣價 ${won(b.sale_price)}`]
+          : [b.frame_no ? "車架 " + b.frame_no : "沒填車架號", b.suppliers ? b.suppliers.name : "未指定廠商",
+             `${b.received_at.replace(/-/g, "/")} 進貨`, b.list_price != null ? `建議售價 ${won(b.list_price)}` : null];
+        main.append(el("div", "sub", sub.filter(Boolean).join("｜")));
+        const tag = el("div", "stock " + (b.status === "在庫" ? (days > 90 ? "low" : "ok") : "ok"));
+        tag.append(el("b", "", b.status === "在庫" ? days : "✓"), el("small", "", b.status === "在庫" ? "天" : b.status));
+        tag.title = b.status === "在庫" ? `已經放了 ${days} 天` + (days > 90 ? "，放滿 3 個月了" : "") : "";
+        const btns = el("div", "row-btns");
+        if (b.status === "在庫") {
+          const s = el("button", "btn-small btn-in", "賣出");
+          s.onclick = () => openSell(b);
+          btns.appendChild(s);
+        } else if (b.status === "已售") {
+          const u = el("button", "btn-small btn-plain", "改回在庫");
+          u.onclick = () => unsellBike(b);
+          btns.appendChild(u);
+        }
+        const e = el("button", "btn-small btn-plain", "編輯");
+        e.onclick = () => openNewBike(b);
+        btns.appendChild(e);
+        li.append(main, tag, btns);
+        ul.appendChild(li);
+      });
+    }
+
+    function openNewBike(b) {
+      editingBike = b || null;
+      $("nbTitle").textContent = b ? "編輯新車" : "進新車";
+      const sel = $("nbSupplier");
+      sel.innerHTML = "";
+      sel.appendChild(el("option", "", "（還沒指定）")).value = "";
+      suppliers.forEach(s => { const o = el("option", "", s.name); o.value = s.id; sel.appendChild(o); });
+      $("nbBrand").value = b ? b.brand || "" : "";
+      $("nbModel").value = b ? b.model : "";
+      $("nbColor").value = b ? b.color || "" : "";
+      $("nbYear").value = b ? b.year || "" : new Date().getFullYear();
+      $("nbFrame").value = b ? b.frame_no || "" : "";
+      $("nbEngine").value = b ? b.engine_no || "" : "";
+      $("nbSupplier").value = b && b.supplier_id ? b.supplier_id : "";
+      $("nbDate").value = b ? b.received_at : today();
+      $("nbListPrice").value = b && b.list_price != null ? b.list_price : "";
+      $("nbNote").value = b ? b.note || "" : "";
+      $("nbStatusWrap").hidden = !b || b.status === "已售";
+      $("nbStatus").value = b && b.status !== "已售" ? b.status : "在庫";
+      $("nbCost").value = "";
+      $("nbCostWrap").hidden = !!b;
+      $("nbCostNote").hidden = !b;
+      $("nbDelete").hidden = !b || b.status === "已售";
+      $("nbModal").hidden = false;
+      $("nbBrand").focus();
+    }
+
+    async function saveNewBike() {
+      const model = $("nbModel").value.trim();
+      if (!model) return toast("請填車型", "error");
+      const num = id => $(id).value === "" ? null : Number($(id).value);
+      const row = {
+        brand: $("nbBrand").value.trim() || null, model, color: $("nbColor").value.trim() || null,
+        year: num("nbYear"), frame_no: $("nbFrame").value.trim().toUpperCase() || null,
+        engine_no: $("nbEngine").value.trim().toUpperCase() || null,
+        supplier_id: $("nbSupplier").value ? Number($("nbSupplier").value) : null,
+        received_at: $("nbDate").value || today(), list_price: num("nbListPrice"), note: $("nbNote").value.trim() || null
+      };
+      if (editingBike) {
+        if (editingBike.status !== "已售") row.status = $("nbStatus").value;
+        const { error } = await db.from("new_bikes").update(row).eq("id", editingBike.id);
+        if (error) return toast(nbError(error), "error");
+        toast(`已更新「${bikeName(row)}」`);
+      } else {
+        const { data, error } = await db.from("new_bikes").insert(row).select().single();
+        if (error) return toast(nbError(error), "error");
+        const cost = num("nbCost");
+        if (cost != null) {
+          const r = await db.rpc("set_new_bike_cost", { p_id: data.id, p_cost: cost });
+          if (r.error) toast("車子進好了，但進價沒存到：" + r.error.message, "error");
+        }
+        toast(`已進貨「${bikeName(row)}」`);
+      }
+      closeModals();
+      loadNewBikes();
+    }
+    const nbError = e => /frame_no|new_bikes_frame_no_key|duplicate/i.test(e.message) ? "這個車架號碼已經進過了" : "儲存失敗：" + e.message;
+
+    async function deleteNewBike() {
+      const b = editingBike;
+      if (!b || !confirm(`確定刪除「${bikeName(b)}」？（打錯或進錯車才刪；退回廠商請在編輯裡改狀態）`)) return;
+      const { error } = await db.from("new_bikes").delete().eq("id", b.id);
+      if (error) return toast("刪除失敗：" + error.message, "error");
+      closeModals();
+      toast(`已刪除「${bikeName(b)}」`);
+      loadNewBikes();
+    }
+
+    function openSell(b) {
+      sellingBike = b; sellCustomer = null;
+      $("sellInfo").textContent = `${bikeName(b)}${b.frame_no ? "｜車架 " + b.frame_no : ""}`;
+      ["sellName", "sellPhone", "sellSearch", "sellPlate"].forEach(id => ($(id).value = ""));
+      $("sellResults").innerHTML = "";
+      $("sellPrice").value = b.list_price != null ? b.list_price : "";
+      $("sellDate").value = today();
+      setSellWho("new");
+      $("sellModal").hidden = false;
+      $("sellName").focus();
+    }
+    function setSellWho(who) {
+      document.querySelectorAll("#sellWho button").forEach(x => x.classList.toggle("active", x.dataset.who === who));
+      $("sellNew").hidden = who !== "new";
+      $("sellOld").hidden = who !== "old";
+      sellCustomer = null;
+      $("sellResults").innerHTML = "";
+    }
+    $("sellWho").addEventListener("click", e => { const b = e.target.closest("button"); if (b) setSellWho(b.dataset.who); });
+
+    let sellTimer = null;
+    function searchSellCustomer() {
+      clearTimeout(sellTimer);
+      sellTimer = setTimeout(async () => {
+        const q = $("sellSearch").value.trim();
+        const ul = $("sellResults");
+        ul.innerHTML = "";
+        sellCustomer = null;
+        if (q.length < 2) return;
+        const digits = q.replace(/\D/g, "");
+        let req = db.from("customers").select("id, name, phone").limit(8);
+        req = digits.length >= 3 ? req.ilike("phone_digits", `%${digits}%`) : req.ilike("name", `%${q}%`);
+        const { data } = await req;
+        if (!data || !data.length) { ul.appendChild(el("li", "empty", "找不到，請改用「新客人」")); return; }
+        data.forEach(c => {
+          const li = el("li", "", `${c.name}　${c.phone || ""}`);
+          li.onclick = () => {
+            sellCustomer = c;
+            ul.querySelectorAll("li").forEach(x => x.classList.toggle("picked", x === li));
+          };
+          ul.appendChild(li);
+        });
+      }, 250);
+    }
+
+    async function sellNewBike() {
+      const b = sellingBike;
+      const isNew = !$("sellNew").hidden;
+      const plate = $("sellPlate").value.toUpperCase().replace(/[^A-Z0-9]/g, "");
+      const price = $("sellPrice").value === "" ? null : Number($("sellPrice").value);
+      if (isNew && !$("sellName").value.trim()) return toast("請填客人名字", "error");
+      if (!isNew && !sellCustomer) return toast("請先找到並點選客人", "error");
+      if (!plate) return toast("請填車牌", "error");
+      if (price == null) return toast("請填賣價", "error");
+      $("sellBtn").disabled = true;
+      const { error } = await db.rpc("sell_new_bike", {
+        p_id: b.id, p_plate: plate, p_price: price,
+        p_customer_id: isNew ? null : sellCustomer.id,
+        p_name: isNew ? $("sellName").value.trim() : null,
+        p_phone: isNew ? $("sellPhone").value.trim() : null,
+        p_date: $("sellDate").value || null
+      });
+      $("sellBtn").disabled = false;
+      if (error) return toast(error.message, "error");
+      closeModals();
+      toast(`已賣出，車牌 ${plate} 已建立車輛資料，之後保養直接查車牌`);
+      loadNewBikes();
+    }
+
+    async function unsellBike(b) {
+      if (!confirm(`把「${bikeName(b)}」改回在庫？\n已經建立的客戶和車輛資料（${b.bikes ? b.bikes.plate : ""}）會保留，需要的話請到車輛總覽刪除。`)) return;
+      const { error } = await db.rpc("unsell_new_bike", { p_id: b.id });
+      if (error) return toast(error.message, "error");
+      toast("已改回在庫");
+      loadNewBikes();
+    }
 
     async function checkLogin() {
       const { data } = await db.auth.getSession();

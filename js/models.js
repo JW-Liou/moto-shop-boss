@@ -106,7 +106,10 @@
       render();
     }));
     panel.querySelector(".mp-search").addEventListener("input", render);
-    document.addEventListener("keydown", e => { if (e.key === "Escape" && panel && !panel.hidden) close(); });
+    // 先攔下 Esc：只關車型選單，不要連外面的視窗一起關掉
+    document.addEventListener("keydown", e => {
+      if (e.key === "Escape" && panel && !panel.hidden) { e.stopImmediatePropagation(); close(); }
+    }, true);
   }
 
   // 店裡最常見的車型（從車輛資料算，給「最常見」那排按鈕用）
