@@ -1568,7 +1568,7 @@
     function fillPartSelect(sel) {
       const keep = sel.value;
       sel.innerHTML = "";
-      const first = el("option", "", "選零件…");
+      const first = el("option", "", stockParts.some(p => p.active) ? "選零件…" : "庫存還沒有零件（代工、臨時零件請按右邊）");
       first.value = "";
       sel.appendChild(first);
       const groups = {};
@@ -1596,7 +1596,8 @@
         return;
       }
       stockParts = data;
-      document.getElementById("useParts").hidden = data.length === 0;
+      // 庫存還沒有零件時也要顯示：臨時零件、代工、客人自備不需要庫存
+      document.getElementById("useParts").hidden = false;
 
       fillPartSelect(document.getElementById("usePart"));
 
@@ -1664,7 +1665,8 @@
     // ===== 選了常用項目 → 問「要扣哪一個」，並自動帶入上次用的 =====
     function refreshPartHints() {
       const box = document.getElementById("useHints");
-      if (!box || !stockParts.length) return;
+      if (!box) return;
+      if (!stockParts.length) { box.innerHTML = ""; renderUsedParts(); return; }   // 沒有庫存零件：只顯示代工、臨時零件
       const items = currentItems();
 
       // 1. 項目被刪掉了：自動帶入的零件也一起拿掉
