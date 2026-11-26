@@ -53,7 +53,7 @@
         「日期」、「本次里程」，後面的機油、齒輪油、空濾、火星塞等欄位都會自動當成保養項目。
       </p>
       <div class="form-actions">
-        <input type="file" id="files" multiple accept=".xlsx,.xls" onchange="readFiles()">
+        <input type="file" id="files" multiple accept=".xlsx,.xls,.ods,.csv" onchange="readFiles()">
       </div>
       <p class="msg" id="msg"></p>
     </section>
@@ -99,9 +99,19 @@
 
     // 把各種日期寫法轉成 2026-11-17
     // 支援：26.11.17、2026/11/17、113/11/17（民國年）、2026年11月17日
-    function parseDate(v) {
+    // text：儲存格「畫面上看到的文字」，日期讀不懂時拿來備用
+    function parseDate(v, text) {
       if (v === null || v === undefined || v === "") return null;
-      if (v instanceof Date) return v.toLocaleDateString("sv-SE");
+      if (v instanceof Date) {
+        const d = isNaN(v) ? null : okYear(v.toLocaleDateString("sv-SE"));
+        if (d) return d;
+        // 有些 .ods／舊 Excel 的日期格子會變成「無效日期」或民國 113 年被當西元 113 年，改用畫面上的文字再讀一次
+        return text && typeof text === "string" && !/invalid/i.test(text) ? parseDate(text) : null;
+      }
+      if (typeof v === "number" && v > 20000 && v < 80000) {
+        // Excel 日期序號（例如 45600 = 2024/11/04）
+        return okYear(new Date(Math.round((v - 25569) * 864e5)).toISOString().slice(0, 10));
+      }
       const m = String(v).match(/(\d{2,4})\s*[\/\-.年]\s*(\d{1,2})\s*[\/\-.月]\s*(\d{1,2})/);
       if (!m) return null;
       let y = Number(m[1]);
@@ -116,7 +126,12 @@
       } else if (y < 1911) {
         y += 1911; // 民國年，例如 113 → 2024
       }
-      return `${y}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+      return okYear(`${y}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`);
+    }
+    // 年份不合理（例如 0113 年）就當作讀不懂，不要硬塞進資料庫
+    function okYear(d) {
+      const y = Number(String(d).slice(0, 4));
+      return y >= 1950 && y <= 2100 && /^\d{4}-\d{2}-\d{2}$/.test(d) ? d : null;
     }
 
     // 里程只留數字，例如 "15,800 km" → 15800
@@ -172,12 +187,14 @@
           const wb = XLSX.read(await file.arrayBuffer(), { cellDates: true });
           const sheet = wb.Sheets[wb.SheetNames[0]]; // 只讀第一個工作表
           const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: "" });
+          const texts = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: "", raw: false }); // 畫面上看到的文字
           const layout = findLayout(rows);
           if (!layout) throw new Error("找不到「日期」或「里程」的標題列");
 
           const records = [];
-          rows.slice(layout.headerRow + 1).forEach(row => {
-            const date = layout.date >= 0 ? parseDate(row[layout.date]) : null;
+          rows.slice(layout.headerRow + 1).forEach((row, i) => {
+            const shown = texts[layout.headerRow + 1 + i] || [];
+            const date = layout.date >= 0 ? parseDate(row[layout.date], shown[layout.date]) : null;
             const mileage = layout.km >= 0 ? parseKm(row[layout.km]) : null;
             const items = rowItems(row, layout.items);
             if (!date && !mileage && !items) return; // 空白行跳過
