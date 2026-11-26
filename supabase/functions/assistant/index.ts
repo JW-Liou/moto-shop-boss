@@ -31,7 +31,7 @@ const S = (description: string) => ({ type: "STRING", description });
 const TOOLS = [
   {
     name: "day_overview",
-    description: "某一天的概況：來客數、開了幾張工單、完成幾筆、營收、預約數、目前待修和維修中的數量。沒給日期就是今天。",
+    description: "某一天的概況：來客數、開了幾張工單、完成幾筆、營收、預約數、目前待修的數量。沒給日期就是今天。",
     parameters: { type: "OBJECT", properties: { date: S("日期 YYYY-MM-DD") } },
   },
   {
@@ -63,7 +63,7 @@ const TOOLS = [
     description: "列出工單看板上的工單。",
     parameters: {
       type: "OBJECT",
-      properties: { status: { type: "STRING", enum: ["未完成", "待修", "維修中", "今天完成"], description: "沒給就是未完成" } },
+      properties: { status: { type: "STRING", enum: ["未完成", "今天完成"], description: "沒給就是未完成" } },
     },
   },
   {
@@ -103,7 +103,7 @@ const TOOLS = [
         parts: S("用了哪些零件"),
         total: { type: "INTEGER", description: "金額（元）" },
         mileage: { type: "INTEGER", description: "目前里程（公里）" },
-        status: { type: "STRING", enum: ["待修", "維修中", "已完成"], description: "沒說就是待修" },
+        status: { type: "STRING", enum: ["已完成", "待修"], description: "沒說就是已完成；只有說「先放著」「還沒修」才是待修" },
       },
       required: ["plate", "items"],
     },

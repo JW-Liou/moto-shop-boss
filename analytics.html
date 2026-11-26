@@ -442,13 +442,12 @@
       const n = s => cur.orders.filter(x => x.status === s).length;
       const segs = [
         { label: "已完成", value: n("已完成"), color: C.done },
-        { label: "維修中", value: n("維修中"), color: C.doing },
-        { label: "待修", value: n("待修"), color: C.todo }
+        { label: "待修", value: cur.orders.length - n("已完成"), color: C.todo }
       ];
       donut($("statusDonut"), segs, String(cur.orders.length), "張工單");
-      const open = segs[1].value + segs[2].value;
+      const open = segs[1].value;
       $("statusInsight").textContent = cur.orders.length
-        ? (open ? `還有 ${open} 張沒完成（待修 ${segs[2].value}、維修中 ${segs[1].value}）。` : "全部工單都完成了。")
+        ? (open ? `還有 ${open} 張待修。` : "全部工單都完成了。")
         : "這段期間沒有工單。";
     }
 

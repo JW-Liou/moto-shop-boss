@@ -118,12 +118,10 @@
           <label>項目<input id="rItems" placeholder="選常用項目或自己打"></label>
           <label>零件<input id="rParts" placeholder="例如：機油 0.8L"></label>
           <label>金額（元）<input type="number" id="rAmount"></label>
-          <label>下次保養里程<input type="number" id="rNext"></label>
           <label>狀態
             <select id="rStatus">
+              <option selected>已完成</option>
               <option>待修</option>
-              <option>維修中</option>
-              <option>已完成</option>
             </select>
           </label>
         </div>
@@ -179,10 +177,9 @@
       <a class="low-stock" id="lowStock" href="inventory.html?tab=order" hidden></a>
       <button class="online-alert" id="onlineAlert" hidden onclick="openOnlineNews()"></button>
 
-      <!-- 分頁：待修／維修中／今日完成 -->
+      <!-- 分頁：待修／今日完成 -->
       <div class="tabs" id="boardTabs">
         <button data-tab="todo" class="active">待修 <span id="cnt-todo">0</span></button>
-        <button data-tab="doing">維修中 <span id="cnt-doing">0</span></button>
         <button data-tab="done">今日完成 <span id="cnt-done">0</span></button>
       </div>
       <ul class="list board-list" id="boardList"></ul>
@@ -264,7 +261,6 @@
         <label>項目<input id="eItems"></label>
         <label>零件<input id="eParts"></label>
         <label>金額（元）<input type="number" id="eAmount"></label>
-        <label>下次保養里程<input type="number" id="eNext"></label>
       </div>
       <!-- 這張工單扣了哪些庫存零件；改了會自動補扣或加回庫存 -->
       <div class="use-parts" id="eUseParts" hidden>
@@ -725,9 +721,10 @@
         );
 
         // 狀態下拉選單，改了就直接存進資料庫，顏色也跟著變
-        const select = el("select", STATUS_CLASS[r.status]);
-        ["待修", "維修中", "已完成"].forEach(s => select.appendChild(el("option", "", s)));
-        select.value = r.status;
+        const shown = r.status === "已完成" ? "已完成" : "待修"; // 以前的「維修中」當成待修
+        const select = el("select", STATUS_CLASS[shown]);
+        ["待修", "已完成"].forEach(s => select.appendChild(el("option", "", s)));
+        select.value = shown;
         select.onchange = () => {
           select.className = STATUS_CLASS[select.value];
           updateStatus(r.id, select.value);
@@ -777,7 +774,6 @@
         date: document.getElementById("rDate").value,
         km,
         amount: Number(document.getElementById("rAmount").value) || 0,
-        nextKm: Number(document.getElementById("rNext").value) || null,
         status: document.getElementById("rStatus").value,
         items
       });
@@ -791,7 +787,6 @@
         items,
         parts: document.getElementById("rParts").value.trim(),
         total: Number(document.getElementById("rAmount").value) || 0,
-        next_service_km: Number(document.getElementById("rNext").value) || null,
         status: document.getElementById("rStatus").value,
         completed_at: document.getElementById("rStatus").value === "已完成" ? new Date().toISOString() : null
       }).select("id").single();
@@ -807,10 +802,10 @@
         currentBike.mileage = km;
       }
 
-      ["rKm", "rItems", "rParts", "rAmount", "rNext"].forEach(id => {
+      ["rKm", "rItems", "rParts", "rAmount"].forEach(id => {
         document.getElementById(id).value = "";
       });
-      document.getElementById("rStatus").value = "待修";
+      document.getElementById("rStatus").value = "已完成";
       showBike();
       loadDashboard();
     }
@@ -818,7 +813,7 @@
     // 工作看板：今日統計、待處理工單
         // ===== 工作看板 =====
     let boardTab = "todo";                       // 目前選的分頁
-    let board = { todo: [], doing: [], done: [] }; // 三個分頁的工單
+    let board = { todo: [], done: [] }; // 兩個分頁的工單
 
     // 分頁按鈕：按了就切換
     function setupBoardTabs() {
@@ -849,7 +844,7 @@
       document.getElementById("statCount").textContent = todayVisitors;
       document.getElementById("statMonth").textContent = monthVisitors;
 
-      // 2. 還沒完成的工單（待修＋維修中）
+      // 2. 還沒完成的工單（待修；以前的「維修中」也算在這裡）
       const { data: pending, error: e2 } = await db
         .from("service_records")
         .select("*, bikes(plate, model)")
@@ -875,12 +870,10 @@
       }
 
       board = {
-        todo: pending.filter(r => r.status === "待修"),
-        doing: pending.filter(r => r.status === "維修中"),
+        todo: pending,
         done
       };
       document.getElementById("cnt-todo").textContent = board.todo.length;
-      document.getElementById("cnt-doing").textContent = board.doing.length;
       document.getElementById("cnt-done").textContent = board.done.length;
       renderBoard();
     }
@@ -894,7 +887,6 @@
       if (list.length === 0) {
         const emptyText = {
           todo: "沒有待修的車。查詢車牌 → 新增工單，狀態選「待修」就會出現在這裡。",
-          doing: "目前沒有維修中的車。",
           done: "今天還沒有完成的工單。"
         };
         ul.appendChild(el("li", "empty", emptyText[boardTab]));
@@ -986,7 +978,6 @@
       document.getElementById("eItems").value = r.items || "";
       document.getElementById("eParts").value = r.parts || "";
       document.getElementById("eAmount").value = r.total ?? "";
-      document.getElementById("eNext").value = r.next_service_km ?? "";
       document.getElementById("editModal").hidden = false;
       loadEditParts(r.id);
     }
@@ -1118,7 +1109,6 @@
         date: document.getElementById("eDate").value,
         km,
         amount: Number(document.getElementById("eAmount").value) || 0,
-        nextKm: Number(document.getElementById("eNext").value) || null,
         items
       }, editingId);
       if (!ok) return;
@@ -1129,8 +1119,7 @@
         mileage: km,
         items,
         parts: document.getElementById("eParts").value.trim(),
-        total: Number(document.getElementById("eAmount").value) || 0,
-        next_service_km: Number(document.getElementById("eNext").value) || null
+        total: Number(document.getElementById("eAmount").value) || 0
       }).eq("id", editingId);
 
       // ④ 處理錯誤
@@ -2212,8 +2201,7 @@
       main.append(sub);
 
       // 右邊：狀態（有一張還沒好，就顯示那個狀態）
-      const order = ["待修", "維修中", "已完成"];
-      const status = order.find(s => v.orders.some(o => o.status === s)) || "已完成";
+      const status = v.orders.some(o => o.status !== "已完成") ? "待修" : "已完成";
       li.append(el("span", "plate", v.bike.plate || "?"), main, el("span", "badge " + STATUS_CLASS[status], status));
       return li;
     }
@@ -2323,9 +2311,9 @@
       return confirmChecks(errors, warnings);
     }
 
-    // 工單：里程、日期、金額、下次保養里程、重複開單
+    // 工單：里程、日期、金額、重複開單
     // editingId：編輯工單時傳入這張工單的編號，比對時要把它自己排除
-    function checkRecord({ date, km, amount, nextKm, status, items }, editingId = null) {
+    function checkRecord({ date, km, amount, status, items }, editingId = null) {
       const errors = [], warnings = [];
 
       if (amount < 0) errors.push("金額不能是負數");
@@ -2355,9 +2343,6 @@
         }
       }
 
-      if (nextKm && km && nextKm <= km) {
-        warnings.push(`下次保養里程（${nextKm.toLocaleString()}）沒有比這次的里程（${km.toLocaleString()}）多`);
-      }
       if (status === "已完成" && !amount) {
         warnings.push("狀態是「已完成」但金額是 0，今日營收不會算到這筆");
       }

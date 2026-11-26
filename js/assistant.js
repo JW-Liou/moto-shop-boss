@@ -184,8 +184,8 @@
           ${field("項目", "items", a.items)}
         </div>`;
     } else {
-      const st = ["待修", "維修中", "已完成"]
-        .map(s => `<option ${s === (a.status || "待修") ? "selected" : ""}>${s}</option>`).join("");
+      const st = ["已完成", "待修"]
+        .map(s => `<option ${s === (a.status === "待修" ? "待修" : "已完成") ? "selected" : ""}>${s}</option>`).join("");
       card.innerHTML = `<b>新增工單（日期：今天）</b>
         <div class="ai-grid">
           ${field("車牌", "plate", a.plate)}
@@ -366,7 +366,7 @@
       items: f.items.trim(),
       parts: (f.parts || "").trim(),
       total: Number(f.total) || 0,
-      status: f.status || "待修",
+      status: f.status || "已完成",
       completed_at: f.status === "已完成" ? new Date().toISOString() : null
     }).select("id").single();
     if (error) throw new Error("新增工單失敗：" + error.message);

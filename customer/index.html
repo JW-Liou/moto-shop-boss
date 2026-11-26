@@ -368,8 +368,6 @@
         card.appendChild(head);
 
         const recs = me.records.filter(r => r.plate === b.plate);
-        const next = recs.find(r => r.next_service_km);
-        if (next) card.appendChild(el("p", "tip", `建議下次保養：${next.next_service_km.toLocaleString()} 公里`));
         if (!recs.length) card.appendChild(el("p", "muted", "還沒有保養紀錄。"));
 
         const list = el("div");
