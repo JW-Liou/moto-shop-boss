@@ -1098,3 +1098,12 @@ a.btn-small { text-decoration: none; }
   .owner-tabs { overflow-x: visible; }
   .owner-tabs button { flex: 1 1 0; text-align: center; padding-left: 6px; padding-right: 6px; }
 }
+
+/* 車牌只打一部分：可能的車牌 */
+.plate-suggest { margin-top: 10px; }
+.plate-suggest-title { font-size: 14px; color: #475569; margin-bottom: 8px; }
+.plate-suggest-list { display: flex; flex-wrap: wrap; gap: 8px; }
+.plate-chip { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; border: 1.5px solid #bfdbfe; background: #fff; border-radius: 10px; padding: 8px 12px; cursor: pointer; font: inherit; }
+.plate-chip:hover { background: #eff6ff; border-color: #60a5fa; }
+.plate-chip b { font-family: ui-monospace, "Consolas", monospace; font-size: 17px; letter-spacing: 1px; color: #0f172a; }
+.plate-chip small { font-size: 12px; color: #64748b; }

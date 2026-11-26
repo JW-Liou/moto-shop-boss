@@ -42,11 +42,13 @@
       <section class="card">
         <h2>車牌查詢</h2>
         <div class="search">
-          <input id="plateInput" placeholder="輸入車牌，例如 ABC-1234"
-                 onkeydown="if (event.key === 'Enter') searchPlate()">
+          <input id="plateInput" placeholder="輸入車牌，只打數字也可以，例如 1234" autocomplete="off"
+                 onkeydown="if (event.key === 'Enter') searchPlate()" oninput="suggestPlates()">
           <button class="btn" onclick="searchPlate()">查詢</button>
         </div>
         <p class="msg" id="msg"></p>
+        <!-- 只打數字或打一部分：列出可能的車牌讓技師點 -->
+        <div class="plate-suggest" id="plateSuggest" hidden></div>
       </section>
 
       <!-- 找不到車：新車建檔 -->
@@ -457,14 +459,62 @@
       remindBackup();
     }
 
+    // ===== 打一部分車牌（例如只打數字）就列出可能的車 =====
+    let suggestTimer = null, suggestSeq = 0;
+    function suggestPlates() {
+      clearTimeout(suggestTimer);
+      const q = normalizePlate(document.getElementById("plateInput").value);
+      if (q.length < 3) { hideSuggest(); return; }
+      suggestTimer = setTimeout(() => findSimilar(q).then(list => showSuggest(q, list)), 250);
+    }
+    function hideSuggest() {
+      const box = document.getElementById("plateSuggest");
+      box.hidden = true; box.innerHTML = "";
+    }
+    // 找車牌裡含有這段字的車；只打數字時比對數字部分（例如 7206 → MDD7206、MDF7206）
+    async function findSimilar(q) {
+      const seq = ++suggestSeq;
+      const { data } = await db.from("bikes").select("plate, model, customers(name)")
+        .ilike("plate", `%${q}%`).order("plate").limit(30);
+      if (seq !== suggestSeq) return null;   // 打字很快時，只用最後一次的結果
+      const digits = q.replace(/\D/g, "");
+      // 數字完全一樣的排前面
+      return (data || []).sort((a, b) =>
+        (b.plate.replace(/\D/g, "") === digits) - (a.plate.replace(/\D/g, "") === digits) || a.plate.localeCompare(b.plate));
+    }
+    function showSuggest(q, list) {
+      if (!list) return;
+      const box = document.getElementById("plateSuggest");
+      box.innerHTML = "";
+      const exact = list.find(b => b.plate === q);
+      const others = list.filter(b => b !== exact);
+      if (!others.length) { box.hidden = true; return; }
+      box.appendChild(el("div", "plate-suggest-title",
+        `${/^\d+$/.test(q) ? "號碼" : "車牌"}有「${q}」的車${list.length >= 30 ? "（太多了，多打幾個字）" : `（${others.length} 台）`}：`));
+      const wrap = el("div", "plate-suggest-list");
+      others.forEach(b => {
+        const btn = el("button", "plate-chip");
+        btn.type = "button";
+        btn.append(el("b", "", b.plate));
+        const sub = [b.model, b.customers && b.customers.name].filter(Boolean).join("・");
+        if (sub) btn.append(el("small", "", sub));
+        btn.onclick = () => { hideSuggest(); openPlate(b.plate); };
+        wrap.appendChild(btn);
+      });
+      box.appendChild(wrap);
+      box.hidden = false;
+    }
+
     // 用車牌查詢，順便把車主資料一起抓出來
     async function searchPlate() {
       const plate = normalizePlate(document.getElementById("plateInput").value);
       const msg = document.getElementById("msg");
       document.getElementById("newBikeBox").hidden = true;
       document.getElementById("bikeBox").hidden = true;
+      clearTimeout(suggestTimer);
       if (!plate) {
         msg.textContent = "請輸入車牌";
+        hideSuggest();
         return;
       }
 
@@ -479,11 +529,26 @@
       }
 
       if (!data) {
-        msg.textContent = "查無此車，請建檔";
+        const list = plate.length >= 3 ? await findSimilar(plate) : [];
+        // 只打數字、剛好只有一台：直接打開
+        if (/^\d+$/.test(plate) && list && list.length === 1) {
+          openPlate(list[0].plate);
+          return;
+        }
+        showSuggest(plate, list);
+        if (!/[A-Z]/.test(plate) || !/\d/.test(plate)) {
+          // 新車建檔一定要完整車牌（英文＋數字）
+          msg.textContent = list && list.length
+            ? "請從下面選一台；要建新車請輸入完整車牌（英文＋數字）"
+            : `沒有車牌有「${plate}」的車。要建新車請輸入完整車牌（英文＋數字）`;
+          return;
+        }
+        msg.textContent = list && list.length ? "沒有這個車牌。是下面其中一台嗎？不是的話請建檔" : "查無此車，請建檔";
         document.getElementById("newPlate").textContent = plate;
         document.getElementById("newBikeBox").hidden = false;
         return;
       }
+      hideSuggest();
       msg.textContent = "";
       currentBike = data;
       saveRecent(data);
