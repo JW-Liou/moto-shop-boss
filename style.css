@@ -1092,3 +1092,9 @@ a.btn-small { text-decoration: none; }
 .sell-results li:hover { background: #eff6ff; }
 .sell-results li.picked { background: #dbeafe; font-weight: 700; box-shadow: inset 0 0 0 2px #60a5fa; }
 #sellWho { margin: 4px 0 10px; }
+
+/* 老闆專區分頁：電腦上平均撐滿整排，手機維持左右滑 */
+@media (min-width: 900px) {
+  .owner-tabs { overflow-x: visible; }
+  .owner-tabs button { flex: 1 1 0; text-align: center; padding-left: 6px; padding-right: 6px; }
+}
