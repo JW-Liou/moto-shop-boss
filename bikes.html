@@ -171,7 +171,7 @@
     async function loadData() {
       const { data, error } = await fetchAll(() => db
         .from("bikes")
-        .select("*, customers(name, phone), service_records(id, date, items, total, status, completed_at)")
+        .select("*, customers(name, phone), service_records(id, date, items, note, total, status, completed_at)")
         .order("id"));
       if (error) {
         alert("讀取失敗：" + error.message);
@@ -367,7 +367,7 @@
       done.forEach(r => {
         const main = el("div", "main");
         const finished = revDate(r) !== r.date ? `${revDate(r)} 完成（${r.date} 開單）` : r.date;
-        main.append(el("div", "", r.items), el("div", "sub", `${finished}｜${r.model || "未填車型"}`));
+        main.append(el("div", "", r.items || (r.note ? `備註：${r.note}` : "")), el("div", "sub", `${finished}｜${r.model || "未填車型"}`));
         const li = el("li");
         li.append(el("span", "plate", r.plate), main, el("div", "money", money(r.total)), openButton(r.plate));
         ul.appendChild(li);
@@ -404,7 +404,7 @@
       }
       list.slice(0, 200).forEach(r => { // 最多先顯示 200 筆，太多會變慢
         const main = el("div", "main");
-        main.append(el("div", "", r.items), el("div", "sub", `${r.date || "日期不明"}｜${r.model || "未填車型"}`));
+        main.append(el("div", "", r.items || (r.note ? `備註：${r.note}` : "")), el("div", "sub", `${r.date || "日期不明"}｜${r.model || "未填車型"}`));
         const li = el("li");
         li.append(
           el("span", "plate", r.plate),

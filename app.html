@@ -108,7 +108,7 @@
         </details>
 
         <h3>新增工單</h3>
-        <div class="form-grid">
+        <div class="form-grid record-grid">
           <label>日期<input type="date" id="rDate"></label>
           <label>里程（公里）<input type="number" id="rKm"></label>
           <label>常用項目
@@ -116,8 +116,8 @@
               <option value="">選了會自動加入</option>
             </select>
           </label>
-          <label>項目<input id="rItems" placeholder="選常用項目或自己打"></label>
-          <label>零件<input id="rParts" placeholder="例如：機油 0.8L"></label>
+          <label class="span-2">項目<input id="rItems" placeholder="選常用項目或自己打"></label>
+          <label class="span-2">零件<input id="rParts" placeholder="例如：機油 0.8L"></label>
           <label>金額（元）<input type="number" id="rAmount"></label>
           <label>狀態
             <select id="rStatus">
@@ -125,6 +125,7 @@
               <option>待修</option>
             </select>
           </label>
+          <label>備註<input id="rNote" placeholder="只打備註也可以存"></label>
         </div>
         <!-- 用了哪些零件：存檔後自動扣庫存（還沒啟用庫存時會自動藏起來） -->
         <div class="use-parts" id="useParts" hidden>
@@ -259,9 +260,10 @@
       <div class="form-grid">
         <label>日期<input type="date" id="eDate"></label>
         <label>里程（公里）<input type="number" id="eKm"></label>
-        <label>項目<input id="eItems"></label>
-        <label>零件<input id="eParts"></label>
+        <label class="span-2">項目<input id="eItems"></label>
+        <label class="span-2">零件<input id="eParts"></label>
         <label>金額（元）<input type="number" id="eAmount"></label>
+        <label>備註<input id="eNote"></label>
       </div>
       <!-- 這張工單扣了哪些庫存零件；改了會自動補扣或加回庫存 -->
       <div class="use-parts" id="eUseParts" hidden>
@@ -353,7 +355,10 @@
     const STATUS_CLASS = { "待修": "todo", "維修中": "doing", "已完成": "done" };
 
     // 常用項目（照店裡的保養表），想增加或刪除直接改這裡
-    const COMMON_ITEMS = ["機油", "齒輪油", "空濾", "火星塞", "煞車皮", "煞車油", "輪胎", "皮帶", "普利珠", "電瓶"];
+    const COMMON_ITEMS = ["大保養", "機油", "齒輪油", "空濾", "火星塞", "煞車皮", "煞車油", "輪胎", "皮帶", "普利珠", "電瓶"];
+
+    // 工單要顯示的文字：有項目就用項目，只打備註的就顯示備註
+    const recText = r => r.items || (r.note ? `備註：${r.note}` : "（沒有填項目）");
 
     // 小工具：建立一個元素，順便設定 class 和文字
     function el(tag, className, text) {
@@ -743,9 +748,10 @@
           ? `｜已通知 ${new Date(r.notified_at).toLocaleString("zh-TW", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit", hour12: false })}`
           : "";
         main.append(
-          el("div", "", r.items + (r.parts ? `（${r.parts}）` : "")),
+          el("div", "", recText(r) + (r.parts ? `（${r.parts}）` : "")),
           el("div", "sub", `${r.date || "日期不明"}｜${r.mileage ?? "-"} 公里${notified}`)
         );
+        if (r.items && r.note) main.append(el("div", "sub", `備註：${r.note}`));
 
         // 狀態下拉選單，改了就直接存進資料庫，顏色也跟著變
         const shown = r.status === "已完成" ? "已完成" : "待修"; // 以前的「維修中」當成待修
@@ -790,9 +796,10 @@
     // 新增工單
     async function addRecord() {
       const items = document.getElementById("rItems").value.trim();
+      const note = document.getElementById("rNote").value.trim();
       const km = Number(document.getElementById("rKm").value) || null;
-      if (!items) {
-        alert("請填寫維修項目");
+      if (!items && !note) {
+        alert("請填寫項目或備註（只打備註也可以）");
         return;
       }
 
@@ -812,6 +819,7 @@
         date: document.getElementById("rDate").value || undefined,
         mileage: km,
         items,
+        note: note || null,
         parts: document.getElementById("rParts").value.trim(),
         total: Number(document.getElementById("rAmount").value) || 0,
         status: document.getElementById("rStatus").value,
@@ -829,7 +837,7 @@
         currentBike.mileage = km;
       }
 
-      ["rKm", "rItems", "rParts", "rAmount"].forEach(id => {
+      ["rKm", "rItems", "rParts", "rAmount", "rNote"].forEach(id => {
         document.getElementById(id).value = "";
       });
       document.getElementById("rStatus").value = "已完成";
@@ -926,7 +934,7 @@
         const sub = boardTab === "done"
           ? `${new Date(r.completed_at).toLocaleTimeString("zh-TW", { hour: "2-digit", minute: "2-digit", hour12: false })} 完成｜${r.bikes.model || "未填車型"}`
           : `${r.bikes.model || "未填車型"}｜${r.date || "日期不明"}`;
-        main.append(el("div", "", r.items), el("div", "sub", sub));
+        main.append(el("div", "", recText(r)), el("div", "sub", sub));
 
         const openBtn = el("button", "btn-small", "打開");
         openBtn.onclick = () => openPlate(r.bikes.plate);
@@ -972,7 +980,7 @@
       data.forEach(r => {
         const time = new Date(r.completed_at).toLocaleTimeString("zh-TW", { hour: "2-digit", minute: "2-digit", hour12: false });
         const main = el("div", "main");
-        main.append(el("div", "", r.items), el("div", "sub", `${time} 完成｜${r.bikes.model || "未填車型"}`));
+        main.append(el("div", "", recText(r)), el("div", "sub", `${time} 完成｜${r.bikes.model || "未填車型"}`));
         const li = el("li");
         li.append(el("span", "plate", r.bikes.plate), main, el("div", "money", `$${(r.total || 0).toLocaleString()}`));
         ul.appendChild(li);
@@ -1005,6 +1013,7 @@
       document.getElementById("eItems").value = r.items || "";
       document.getElementById("eParts").value = r.parts || "";
       document.getElementById("eAmount").value = r.total ?? "";
+      document.getElementById("eNote").value = r.note || "";
       document.getElementById("editModal").hidden = false;
       loadEditParts(r.id);
     }
@@ -1125,11 +1134,12 @@
     async function saveEdit() {
       // ① 拿輸入
       const items = document.getElementById("eItems").value.trim();
+      const note = document.getElementById("eNote").value.trim();
       const km = Number(document.getElementById("eKm").value) || null;
 
       // ② 檢查
-      if (!items) {
-        alert("請填寫維修項目");
+      if (!items && !note) {
+        alert("請填寫項目或備註（只打備註也可以）");
         return;
       }
       const ok = checkRecord({
@@ -1146,7 +1156,8 @@
         mileage: km,
         items,
         parts: document.getElementById("eParts").value.trim(),
-        total: Number(document.getElementById("eAmount").value) || 0
+        total: Number(document.getElementById("eAmount").value) || 0,
+        note: note || null
       }).eq("id", editingId);
 
       // ④ 處理錯誤
@@ -2054,7 +2065,7 @@
       const hello = owner.name && owner.name !== "未填姓名" ? `${owner.name} 您好` : "您好";
       const money = r.total ? `，費用共 ${r.total.toLocaleString()} 元` : "";
       document.getElementById("notifyText").value =
-        `【${SHOP_NAME}】${hello}，您的機車 ${currentBike.plate} 已經處理好了（${r.items}）${money}，可以來取車了。謝謝您！`;
+        `【${SHOP_NAME}】${hello}，您的機車 ${currentBike.plate} 已經處理好了${r.items ? `（${r.items}）` : ""}${money}，可以來取車了。謝謝您！`;
       document.getElementById("notifyTo").textContent = `傳給：${owner.name || "車主"}　${owner.phone}`;
       updateNotifyLinks();
       document.getElementById("notifyText").oninput = updateNotifyLinks;
@@ -2370,7 +2381,7 @@
         }
       }
 
-      if (status === "已完成" && !amount) {
+      if (status === "已完成" && !amount && items) {
         warnings.push("狀態是「已完成」但金額是 0，今日營收不會算到這筆");
       }
       if (date && items) {

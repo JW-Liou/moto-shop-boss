@@ -1111,3 +1111,7 @@ a.btn-small { text-decoration: none; }
 /* 車輛資料：排氣定檢那一行 */
 .check-line { margin-top: 2px; font-size: 14px; }
 .check-line a { margin-left: 4px; white-space: nowrap; }
+
+/* 新增工單：項目、零件佔兩格，空出來的格子讓後面的欄位補上 */
+.record-grid { grid-auto-flow: dense; }
+.form-grid .span-2 { grid-column: span 2; }
