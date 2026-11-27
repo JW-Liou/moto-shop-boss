@@ -77,6 +77,7 @@
       <section class="card" id="bikeBox" hidden>
         <div class="bike-head" id="bikeTitle"></div>
         <p class="info" id="bikeInfo"></p>
+        <p class="info check-line" id="bikeCheck"></p>
         <p class="appt-note" id="bikeAppt" hidden></p>
 
         <!-- 登記／修改車主：填同一支電話，多台車就會連到同一位客戶 -->
@@ -672,6 +673,7 @@
         : "未登記車主";
       document.getElementById("bikeInfo").textContent =
         `車主：${owner}｜年份：${b.year || "-"}｜目前里程：${b.mileage ?? "-"} 公里`;
+      showCheckLine(b);
       // 把目前的車主帶進「登記／修改車主」表單
       document.getElementById("editOwnerName").value = b.customers ? b.customers.name : "";
       document.getElementById("editOwnerPhone").value = b.customers ? b.customers.phone || "" : "";
@@ -685,6 +687,31 @@
       resetPartsForBike();
       loadRecords();
       loadBikeAppts();
+    }
+
+    // 排氣定檢資料（從環境部網站查回來的，見 sql/8_排氣定檢資料.sql）
+    // 規定：出廠滿 5 年的燃油機車，每年在發照月份的前後 1 個月內要定檢
+    function showCheckLine(b) {
+      const box = document.getElementById("bikeCheck");
+      box.innerHTML = "";
+      const parts = [];
+      if (b.brand) parts.push(b.brand + (b.cc ? ` ${b.cc}cc` : ""));
+      if (b.made_ym) parts.push(`出廠 ${b.made_ym.slice(0, 4)}/${b.made_ym.slice(4, 6)}`);
+      if (b.license_date) {
+        const m = Number(b.license_date.slice(5, 7));
+        const from = (m + 10) % 12 + 1, to = m % 12 + 1;   // 發照月的前一個月到後一個月
+        const fiveYears = b.made_ym ? `${Number(b.made_ym.slice(0, 4)) + 5}${b.made_ym.slice(4, 6)}` : "";
+        const nowYm = today().slice(0, 7).replace("-", "");
+        parts.push(fiveYears && nowYm < fiveYears
+          ? `出廠未滿 5 年，${fiveYears.slice(0, 4)} 年起每年 ${from}–${to} 月定檢`
+          : `每年 ${from}–${to} 月定檢`);
+      }
+      if (b.last_check_date) parts.push(`上次定檢 ${b.last_check_date.replaceAll("-", "/")}`);
+      const link = el("a", "", "環境部查詢");
+      link.href = "https://mobile.moenv.gov.tw/Motor/query/Query_Check.aspx";
+      link.target = "_blank";
+      link.rel = "noopener";
+      box.append(parts.length ? "排氣定檢：" + parts.join("｜") + "　" : "排氣定檢：還沒有資料　", link);
     }
 
     // 讀出這台車的所有工單
